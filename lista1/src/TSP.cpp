@@ -122,7 +122,7 @@ int bruteForce(const vector<vector<int>> &matrix) {
     if (current_cost < min_cost)
       min_cost = current_cost;
   } while (next_permutation(path.begin() + 1, path.end()));
-  // +1 by zawsze zaczynac z zera (optymalizacja dla symetrycznych/cykli)
+  // +1 by zawsze zaczynac z zera (optymalizacja dla symetrycznych i cykli)
 
   return min_cost;
 }
@@ -133,8 +133,8 @@ int randomSearch(const vector<vector<int>> &matrix, int local_repeats) {
   vector<int> path(size);
   iota(path.begin(), path.end(), 0);
 
-  random_device rd;
-  mt19937 g(rd());
+  // pseudolosowe, aby zachowac powtarzalnosc
+  static mt19937 g(42);
   int min_cost = numeric_limits<int>::max();
 
   for (int i = 0; i < local_repeats; ++i) {

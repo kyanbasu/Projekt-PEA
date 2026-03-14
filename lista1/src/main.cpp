@@ -5,11 +5,12 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <string>
+#include <vector>
 
 using namespace std;
 
-// Funkcja rysujaca pasek postepu w konsoli
 void printProgress(int current, int total, const string &prefix) {
   int barWidth = 50;
   float progress = static_cast<float>(current) / total;
@@ -32,34 +33,49 @@ void printProgress(int current, int total, const string &prefix) {
 
 // Makro do mierzenia czasu
 template <typename Func>
-double measureTime(Func function, int repeats, int &best_cost_out,
-                   bool show_progress, const string &algo_name) {
-  auto start = chrono::high_resolution_clock::now();
+vector<pair<double, int>> measureTimeAll(Func function, int repeats,
+                                         bool show_progress,
+                                         const string &algo_name) {
+  vector<pair<double, int>> results;
+  results.reserve(repeats);
 
   for (int r = 0; r < repeats; ++r) {
-    best_cost_out = function();
+    auto t0 = chrono::high_resolution_clock::now();
+    int cost = function();
+    auto t1 = chrono::high_resolution_clock::now();
 
-    if (show_progress) {
+    chrono::duration<double, milli> dur = t1 - t0;
+    results.push_back({dur.count(), cost});
+
+    if (show_progress)
       printProgress(r + 1, repeats, algo_name);
-    }
   }
+  return results;
+}
 
-  auto end = chrono::high_resolution_clock::now();
-  chrono::duration<double, milli> duration = end - start;
-  return duration.count() / repeats;
+// funkcja pomocicza do obliczania najlepszego kosztu i sredniego czasu z
+// wektora wynikow
+pair<int, double> summarise(const vector<pair<double, int>> &runs) {
+  int best = runs[0].second;
+  double sum_t = 0.0;
+  for (const auto &[t, c] : runs) {
+    if (c != -1 && (best == -1 || c < best))
+      best = c;
+    sum_t += t;
+  }
+  return {best, sum_t / runs.size()};
 }
 
 int main() {
   Config cfg = loadConfig("config.ini");
 
   if (cfg.test_type & 1) {
-
-    ofstream csvOut(cfg.output_file);
-    csvOut << "Instance,Size,Algorithm,BestCost,AvgTime_ms,PeakMem_KB\n";
-    csvOut.flush();
-
     if (cfg.show_progress)
       cout << "Znaleziono " << cfg.instances.size() << " plikow.\n";
+
+    // bufor na wyniki
+    ostringstream buf;
+    buf << "Instance,Size,Algorithm,Iteration,Time_ms,Cost\n";
 
     for (const auto &inst_name : cfg.instances) {
       int size = 0;
@@ -71,93 +87,88 @@ int main() {
         cout << "Instancja: " << inst_name << " (Rozmiar: " << size << ")\n";
       }
 
-      int best_cost;
-      double avg_time;
-      long mem_usage;
+      auto run_rand = [&]() {
+        return randomSearch(matrix, cfg.rand_local_repeats);
+      };
+      auto run_nn = [&]() { return nearestNeighbour(matrix); };
+      auto run_rnn = [&]() { return repetitiveNearestNeighbour(matrix); };
 
-      // 1. RAND
-      best_cost = -1;
-      avg_time = measureTime(
-          [&]() { return randomSearch(matrix, cfg.rand_local_repeats); },
-          cfg.repeats, best_cost, cfg.show_progress, "RAND");
-      mem_usage = getPeakMemoryUsageKB();
+      struct AlgoRun {
+        string name;
+        vector<pair<double, int>> results;
+      };
 
-      csvOut << inst_name << "," << size << ",RAND," << best_cost << ","
-             << avg_time << "," << mem_usage << "\n";
-      csvOut.flush();
-      if (cfg.show_progress)
-        cout << "   -> Czas: " << avg_time << " ms | Koszt: " << best_cost
-             << " | RAM: " << mem_usage << " KB\n";
+      vector<AlgoRun> algos = {
+          {"RAND",
+           measureTimeAll(run_rand, cfg.repeats, cfg.show_progress, "RAND")},
+          {"NN", measureTimeAll(run_nn, cfg.repeats, cfg.show_progress, "NN")},
+          {"RNN",
+           measureTimeAll(run_rnn, cfg.repeats, cfg.show_progress, "RNN")},
+      };
 
-      // 2. Nearest Neighbour (NN)
-      best_cost = -1;
-      avg_time = measureTime([&]() { return nearestNeighbour(matrix); },
-                             cfg.repeats, best_cost, cfg.show_progress, "NN");
-      mem_usage = getPeakMemoryUsageKB();
+      long mem_usage = getPeakMemoryUsageKB();
 
-      csvOut << inst_name << "," << size << ",NN," << best_cost << ","
-             << avg_time << "," << mem_usage << "\n";
-      csvOut.flush();
-      if (cfg.show_progress)
-        cout << "   -> Czas: " << avg_time << " ms | Koszt: " << best_cost
-             << " | RAM: " << mem_usage << " KB\n";
+      for (auto &ar : algos) {
+        auto [best, avg_t] = summarise(ar.results);
 
-      // 3. Repetitive Nearest Neighbour (RNN)
-      best_cost = -1;
-      avg_time =
-          measureTime([&]() { return repetitiveNearestNeighbour(matrix); },
-                      cfg.repeats, best_cost, cfg.show_progress, "RNN");
-      mem_usage = getPeakMemoryUsageKB();
+        // zapisanie kazdej iteracji do bufora
+        for (int i = 0; i < (int)ar.results.size(); ++i) {
+          buf << inst_name << "," << size << "," << ar.name << "," << (i + 1)
+              << "," << ar.results[i].first << "," << ar.results[i].second
+              << "\n";
+        }
 
-      csvOut << inst_name << "," << size << ",RNN," << best_cost << ","
-             << avg_time << "," << mem_usage << "\n";
-      csvOut.flush();
-      if (cfg.show_progress)
-        cout << "   -> Czas: " << avg_time << " ms | Koszt: " << best_cost
-             << " | RAM: " << mem_usage << " KB\n";
+        if (cfg.show_progress)
+          cout << "   [" << ar.name << "] Avg: " << avg_t
+               << " ms | Best: " << best << " | RAM: " << mem_usage << " KB\n";
+      }
     }
 
+    // zapisanie bufora do pliku
+    ofstream csvOut(cfg.output_file);
+    csvOut << buf.str();
     csvOut.close();
+    if (cfg.show_progress)
+      cout << "\nWyniki zapisano do " << cfg.output_file << "\n";
+
   } else if (cfg.test_type & 2) {
 
-    // Testowanie Brute Force na losowych grafach (rozmiaru 6-15)
     if (cfg.show_progress) {
       cout << "\n============================================\n";
-      cout << "Brute Force dla grafow losowych o "
-              "rozmiarach 6 do 15...\n";
+      cout << "Brute Force dla grafow losowych o rozmiarach 6 do 15...\n";
+    }
+
+    ostringstream bfBuf;
+    bfBuf << "Symmetric,Size,BestCost,Time_ms\n";
+
+    for (int size = 6; size <= 15; ++size) {
+      vector<vector<int>> matrix_sym = generateRandomMatrix(size, true);
+      auto sym_runs = measureTimeAll([&]() { return bruteForce(matrix_sym); },
+                                     1, false, "");
+      int best_sym = sym_runs[0].second;
+      double t_sym = sym_runs[0].first;
+      bfBuf << "1," << size << "," << best_sym << "," << t_sym << "\n";
+      if (cfg.show_progress)
+        cout << "BF Symetryczny (N=" << setw(2) << size << ") -> " << setw(10)
+             << t_sym << " ms | Koszt: " << best_sym << "\n";
+
+      vector<vector<int>> matrix_asym = generateRandomMatrix(size, false);
+      auto asym_runs = measureTimeAll([&]() { return bruteForce(matrix_asym); },
+                                      1, false, "");
+      int best_asym = asym_runs[0].second;
+      double t_asym = asym_runs[0].first;
+      bfBuf << "0," << size << "," << best_asym << "," << t_asym << "\n";
+      if (cfg.show_progress)
+        cout << "BF Asymetryczny(N=" << setw(2) << size << ") -> " << setw(10)
+             << t_asym << " ms | Koszt: " << best_asym << "\n";
     }
 
     ofstream bfOut("bf_results.csv");
-    bfOut << "Symmetric,Size,BestCost,Time_ms\n";
-
-    for (int size = 6; size <= 15; ++size) {
-      // Grafy symetryczne
-      vector<vector<int>> matrix_sym = generateRandomMatrix(size, true);
-      int best_cost = -1;
-      double avg_time = measureTime([&]() { return bruteForce(matrix_sym); }, 1,
-                                    best_cost, false, "");
-      bfOut << "1," << size << "," << best_cost << "," << avg_time << "\n";
-      if (cfg.show_progress)
-        cout << "BF Symetryczny (Rozmiar " << setw(2) << size
-             << ") -> Czas: " << setw(10) << avg_time
-             << " ms | Koszt: " << best_cost << "\n";
-
-      // Grafy asymetryczne
-      vector<vector<int>> matrix_asym = generateRandomMatrix(size, false);
-      best_cost = -1;
-      avg_time = measureTime([&]() { return bruteForce(matrix_asym); }, 1,
-                             best_cost, false, "");
-      bfOut << "0," << size << "," << best_cost << "," << avg_time << "\n";
-      if (cfg.show_progress)
-        cout << "BF Asymetryczny(Rozmiar " << setw(2) << size
-             << ") -> Czas: " << setw(10) << avg_time
-             << " ms | Koszt: " << best_cost << "\n";
-    }
-
+    bfOut << bfBuf.str();
     bfOut.close();
 
     if (cfg.show_progress)
-      cout << "\nZakonczono badanie BruteForce pomyslnie. Wyniki zapisano do "
+      cout << "\nZakonczono badanie BruteForce. Wyniki zapisano do "
               "bf_results.csv\n";
   }
 
