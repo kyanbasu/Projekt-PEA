@@ -1,8 +1,8 @@
 CXX = clang++
-CXXFLAGS = -std=c++17 -Wall -O2
+CXXFLAGS = -std=c++17 -Wall -O2 -I./include
 
 TARGET = lista1
-SOURCES = ./src/*.cpp ./include/*.cpp
+SOURCES = ./src/*.cpp
 
 all: $(TARGET)
 
@@ -10,7 +10,7 @@ $(TARGET): $(SOURCES)
 	$(CXX) $(CXXFLAGS) $(SOURCES) -o $(TARGET)
 
 debug: $(SOURCES)
-	clang++ $(CXXFLAGS) -Werror -g -fsanitize=address $(SOURCES) -o $(TARGET).exe
+	$(CXX) $(CXXFLAGS) -Werror -g -fsanitize=address $(SOURCES) -o $(TARGET)
 
 .PHONY: clean
 clean:

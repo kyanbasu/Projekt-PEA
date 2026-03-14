@@ -1,0 +1,3 @@
+[submodule "sprawozdanie"]
+	path = sprawozdanie
+	url = git@github.com:kyanbasu/Projekt-PEA-sprawodzanie.git
