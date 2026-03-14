@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #ifdef __linux__
 #include <sys/resource.h>
 #endif
@@ -14,3 +16,5 @@ inline long getPeakMemoryUsageKB()
     return 0;
 #endif
 }
+
+std::vector<std::vector<int>> generateRandomMatrix(int size, bool symmetric);

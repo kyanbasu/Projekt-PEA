@@ -10,6 +10,7 @@ struct Config
     int repeats;
     int rand_local_repeats; // ile losowych sciezek wygenerowac dla jednej instancji
     std::vector<std::string> instances;
+    int test_type;
 };
 
 Config loadConfig(const std::string &filename);

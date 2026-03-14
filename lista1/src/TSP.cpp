@@ -193,45 +193,85 @@ int nearestNeighbour(const vector<vector<int>> &matrix)
     return total_cost;
 }
 
-// --- Repetitive Nearest Neighbour (RNN) ---
+// --- Repetitive Nearest Neighbour (RNN) z rozgalezianiem ---
+#include <chrono>
+
+void exploreRNN(const vector<vector<int>>& matrix, int start_node, int current_node, 
+               vector<bool>& visited, int current_cost, int visited_count, int& best_overall_cost,
+               chrono::time_point<chrono::high_resolution_clock> start_time, double timeout_ms, bool& time_exceeded) {
+               
+    // Jesli przekroczylismy globalny czas, przerywamy by uniknac wiszenia
+    if (time_exceeded) return;
+    
+    auto now = chrono::high_resolution_clock::now();
+    chrono::duration<double, milli> elapsed = now - start_time;
+    if (elapsed.count() > timeout_ms) {
+        time_exceeded = true;
+        return;
+    }
+
+    // --- OPTYMALIZACJA (PRUNING) ---
+    // Jesli nasz budowany koszt juz teraz jest gorszy lub rowny 
+    // najlepszemu wynikowi z innej galezi, to przerywamy!
+    if (current_cost >= best_overall_cost) {
+        return; 
+    }
+
+    int n = matrix.size();
+    if (visited_count == n) {
+        int return_edge = matrix[current_node][start_node];
+        // -1 to nieskonczonosc dla wygenerowanych macierzy - brak sciezki powrotnej
+        if (return_edge != -1) {
+            int final_cost = current_cost + return_edge;
+            if (final_cost < best_overall_cost) best_overall_cost = final_cost;
+        }
+        return;
+    }
+
+    int min_weight = numeric_limits<int>::max();
+    for (int i = 0; i < n; ++i) {
+        if (!visited[i] && i != current_node && matrix[current_node][i] != -1) {
+            if (matrix[current_node][i] < min_weight) min_weight = matrix[current_node][i];
+        }
+    }
+    
+    // Graf niespojny lub slepy zaulek
+    if (min_weight == numeric_limits<int>::max()) return;
+
+    for (int i = 0; i < n; ++i) {
+        if (!visited[i] && i != current_node && matrix[current_node][i] == min_weight) {
+            visited[i] = true;
+            exploreRNN(matrix, start_node, i, visited, current_cost + min_weight, visited_count + 1, best_overall_cost, start_time, timeout_ms, time_exceeded);
+            visited[i] = false; // Backtracking - wymagany przez specyfikację projektu
+        }
+    }
+}
+
 int repetitiveNearestNeighbour(const vector<vector<int>> &matrix)
 {
-    int best_cost = numeric_limits<int>::max();
+    // Najpierw wyznaczamy wynik zwyklym NN, by miec silny "UpperBound"
+    // To kolosalnie poprawia efektywnosc odcinania galezi w exploreRNN.
+    int best_cost = nearestNeighbour(matrix);
     int n = matrix.size();
+
+    // Dla ogromnych instancji ograniczamy czas by program nie "wisiał" godzinami.
+    // Specyfikacja dopuszcza "rozsadny czas" 15-30min. Tutaj dajemy np. 3-10 sekund per sciezka
+    double timeout_ms = 5000.0; // 5 sekund calosciowego limitu na instancje (mozna zmienic)
+    auto start_time = chrono::high_resolution_clock::now();
+    bool time_exceeded = false;
 
     for (int start_node = 0; start_node < n; ++start_node)
     {
+        if (time_exceeded) break;
         vector<bool> visited(n, false);
-        int current_node = start_node;
-        visited[current_node] = true;
-
-        int total_cost = 0;
-
-        for (int step = 1; step < n; ++step)
-        {
-            int next_node = -1;
-            int min_weight = numeric_limits<int>::max();
-
-            for (int i = 0; i < n; ++i)
-            {
-                if (!visited[i] && matrix[current_node][i] < min_weight)
-                {
-                    min_weight = matrix[current_node][i];
-                    next_node = i;
-                }
-            }
-
-            if (next_node != -1) {
-                visited[next_node] = true;
-                total_cost += min_weight;
-                current_node = next_node;
-            }
-        }
-
-        total_cost += matrix[current_node][start_node]; // Powrot do startu
-        if (total_cost < best_cost) {
-            best_cost = total_cost;
-        }
+        visited[start_node] = true;
+        exploreRNN(matrix, start_node, start_node, visited, 0, 1, best_cost, start_time, timeout_ms, time_exceeded);
     }
+    
+    if (time_exceeded) {
+        // Jesli ucielo nas z powodu czasu, zwracamy najlepszy znaleziony dotychczas
+        // (przynajmniej z NN) + info dla uzytkownika (w logach ewentualnie)
+    }
+    
     return best_cost;
 }

@@ -26,6 +26,7 @@ Config loadConfig(const std::string& filename) {
             else if (key == "show_progress") cfg.show_progress = std::stoi(val);
             else if (key == "repeats") cfg.repeats = std::stoi(val);
             else if (key == "rand_local_repeats") cfg.rand_local_repeats = std::stoi(val);
+            else if (key == "test_type") cfg.test_type = std::stoi(val);
         }
     }
     
@@ -33,7 +34,6 @@ Config loadConfig(const std::string& filename) {
     if (fs::exists(cfg.data_folder) && fs::is_directory(cfg.data_folder)) {
         for (const auto& entry : fs::directory_iterator(cfg.data_folder)) {
             std::string ext = entry.path().extension().string();
-            // Ignorujemy pliki .opt.tour
             if (ext == ".tsp" || ext == ".atsp") {
                 cfg.instances.push_back(entry.path().filename().string());
             }
