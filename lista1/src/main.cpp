@@ -75,28 +75,7 @@ int main() {
       double avg_time;
       long mem_usage;
 
-      // 1. Brute Force
-      if (size <= 12) {
-        best_cost = -1;
-        // Dla BF dajemy 1 powtorzenie w measureTime, bo to przeglad zupelny i
-        // trwa dlugo. Pasek postepu skoczy od razu do 100% po zakonczeniu.
-        avg_time = measureTime([&]() { return bruteForce(matrix); }, 1,
-                               best_cost, cfg.show_progress, "BruteForce");
-        mem_usage = getPeakMemoryUsageKB();
-
-        csvOut << inst_name << "," << size << ",BruteForce," << best_cost << ","
-               << avg_time << "," << mem_usage << "\n";
-        csvOut.flush(); // Natychmiastowy zapis do pliku!
-
-        if (cfg.show_progress)
-          cout << "   -> Czas: " << avg_time << " ms | Koszt: " << best_cost
-               << " | RAM: " << mem_usage << " KB\n";
-      } else {
-        if (cfg.show_progress)
-          cout << "BruteForce      [ POMINIETO (rozmiar > 12) ]\n";
-      }
-
-      // 2. RAND
+      // 1. RAND
       best_cost = -1;
       avg_time = measureTime(
           [&]() { return randomSearch(matrix, cfg.rand_local_repeats); },
@@ -110,7 +89,7 @@ int main() {
         cout << "   -> Czas: " << avg_time << " ms | Koszt: " << best_cost
              << " | RAM: " << mem_usage << " KB\n";
 
-      // 3. Nearest Neighbour (NN)
+      // 2. Nearest Neighbour (NN)
       best_cost = -1;
       avg_time = measureTime([&]() { return nearestNeighbour(matrix); },
                              cfg.repeats, best_cost, cfg.show_progress, "NN");
@@ -123,7 +102,7 @@ int main() {
         cout << "   -> Czas: " << avg_time << " ms | Koszt: " << best_cost
              << " | RAM: " << mem_usage << " KB\n";
 
-      // 4. Repetitive Nearest Neighbour (RNN)
+      // 3. Repetitive Nearest Neighbour (RNN)
       best_cost = -1;
       avg_time =
           measureTime([&]() { return repetitiveNearestNeighbour(matrix); },
@@ -141,10 +120,10 @@ int main() {
     csvOut.close();
   } else if (cfg.test_type & 2) {
 
-    // Testowanie Brute Force na losowych grafach (Rozmiar 6-15)
+    // Testowanie Brute Force na losowych grafach (rozmiaru 6-15)
     if (cfg.show_progress) {
       cout << "\n============================================\n";
-      cout << "Rozpoczynam badanie Brute Force dla grafow losowych o "
+      cout << "Brute Force dla grafow losowych o "
               "rozmiarach 6 do 15...\n";
     }
 
@@ -178,10 +157,8 @@ int main() {
     bfOut.close();
 
     if (cfg.show_progress)
-      cout << "\nZakonczono badanie BruteForce pomyslnie. Wyniki sa w "
+      cout << "\nZakonczono badanie BruteForce pomyslnie. Wyniki zapisano do "
               "bf_results.csv\n";
-    if (cfg.show_progress)
-      cout << "Glowne wyliczenia wykonane prawidlowo.\n";
   }
 
   return 0;
