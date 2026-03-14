@@ -193,40 +193,7 @@ int nearestNeighbour(const vector<vector<int>> &matrix)
     return total_cost;
 }
 
-// --- Repetitive Nearest Neighbour (RNN) z rozgalezianiem ---
-void exploreRNN(const vector<vector<int>>& matrix, int start_node, int current_node, 
-               vector<bool>& visited, int current_cost, int visited_count, int& best_overall_cost) {
-               
-    // --- OPTYMALIZACJA (PRUNING) ---
-    // Jesli nasz budowany koszt juz teraz jest gorszy lub rowny 
-    // najlepszemu wynikowi z innej galezi, to przerywamy przeszukiwanie!
-    if (current_cost >= best_overall_cost) {
-        return; 
-    }
-
-    int n = matrix.size();
-    if (visited_count == n) {
-        int final_cost = current_cost + matrix[current_node][start_node];
-        if (final_cost < best_overall_cost) best_overall_cost = final_cost;
-        return;
-    }
-
-    int min_weight = numeric_limits<int>::max();
-    for (int i = 0; i < n; ++i) {
-        if (!visited[i] && i != current_node) {
-            if (matrix[current_node][i] < min_weight) min_weight = matrix[current_node][i];
-        }
-    }
-
-    for (int i = 0; i < n; ++i) {
-        if (!visited[i] && i != current_node && matrix[current_node][i] == min_weight) {
-            visited[i] = true;
-            exploreRNN(matrix, start_node, i, visited, current_cost + min_weight, visited_count + 1, best_overall_cost);
-            visited[i] = false; // Backtracking
-        }
-    }
-}
-
+// --- Repetitive Nearest Neighbour (RNN) ---
 int repetitiveNearestNeighbour(const vector<vector<int>> &matrix)
 {
     int best_cost = numeric_limits<int>::max();
@@ -235,8 +202,36 @@ int repetitiveNearestNeighbour(const vector<vector<int>> &matrix)
     for (int start_node = 0; start_node < n; ++start_node)
     {
         vector<bool> visited(n, false);
-        visited[start_node] = true;
-        exploreRNN(matrix, start_node, start_node, visited, 0, 1, best_cost);
+        int current_node = start_node;
+        visited[current_node] = true;
+
+        int total_cost = 0;
+
+        for (int step = 1; step < n; ++step)
+        {
+            int next_node = -1;
+            int min_weight = numeric_limits<int>::max();
+
+            for (int i = 0; i < n; ++i)
+            {
+                if (!visited[i] && matrix[current_node][i] < min_weight)
+                {
+                    min_weight = matrix[current_node][i];
+                    next_node = i;
+                }
+            }
+
+            if (next_node != -1) {
+                visited[next_node] = true;
+                total_cost += min_weight;
+                current_node = next_node;
+            }
+        }
+
+        total_cost += matrix[current_node][start_node]; // Powrot do startu
+        if (total_cost < best_cost) {
+            best_cost = total_cost;
+        }
     }
     return best_cost;
 }

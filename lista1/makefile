@@ -7,10 +7,10 @@ SOURCES = ./src/*.cpp
 all: $(TARGET)
 
 $(TARGET): $(SOURCES)
-	$(CXX) $(CXXFLAGS) $(SOURCES) -o $(TARGET)
+	$(CXX) $(CXXFLAGS) $(SOURCES) -o $(TARGET).out
 
 debug: $(SOURCES)
-	$(CXX) $(CXXFLAGS) -Werror -g -fsanitize=address $(SOURCES) -o $(TARGET)
+	$(CXX) $(CXXFLAGS) -Werror -g -fsanitize=address $(SOURCES) -o $(TARGET).out
 
 .PHONY: clean
 clean:
