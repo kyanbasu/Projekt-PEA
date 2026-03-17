@@ -26,7 +26,7 @@ vector<vector<int>> loadMatrix(const string &filepath, int &size) {
   string line;
   bool is_euc2d = false;
   bool in_coord_section = false;
-  bool in_matrix_section = false;
+  string weight_format = "FULL_MATRIX";
   vector<Node> nodes;
 
   size = 0;
@@ -48,7 +48,19 @@ vector<vector<int>> loadMatrix(const string &filepath, int &size) {
       continue;
     }
 
-    // wagi
+    // format zapisu wag
+    if (line.find("EDGE_WEIGHT_FORMAT") != string::npos) {
+      if (line.find("LOWER_DIAG_ROW") != string::npos) {
+        weight_format = "LOWER_DIAG_ROW";
+      } else if (line.find("UPPER_ROW") != string::npos) {
+        weight_format = "UPPER_ROW";
+      } else if (line.find("FULL_MATRIX") != string::npos) {
+        weight_format = "FULL_MATRIX";
+      }
+      continue;
+    }
+
+    // typ wag
     if (line.find("EDGE_WEIGHT_TYPE") != string::npos) {
       if (line.find("EUC_2D") != string::npos) {
         is_euc2d = true;
@@ -59,12 +71,9 @@ vector<vector<int>> loadMatrix(const string &filepath, int &size) {
     // koordynaty
     if (line.find("NODE_COORD_SECTION") != string::npos) {
       in_coord_section = true;
-      in_matrix_section = false;
       continue;
     } else if (line.find("EDGE_WEIGHT_SECTION") != string::npos) {
-      in_matrix_section = true;
-      in_coord_section = false;
-      continue;
+      break; // Zatrzymujemy parsujaca petle getline na poczatku sekcji macierzy
     }
 
     if (in_coord_section) {
@@ -73,8 +82,6 @@ vector<vector<int>> loadMatrix(const string &filepath, int &size) {
       if (ss >> n.id >> n.x >> n.y) {
         nodes.push_back(n);
       }
-    } else if (in_matrix_section) {
-      break;
     }
   }
 
@@ -91,9 +98,28 @@ vector<vector<int>> loadMatrix(const string &filepath, int &size) {
       }
     }
   } else {
-    for (int i = 0; i < size; ++i) {
-      for (int j = 0; j < size; ++j) {
-        file >> matrix[i][j];
+    if (weight_format == "LOWER_DIAG_ROW") {
+      for (int i = 0; i < size; ++i) {
+        for (int j = 0; j <= i; ++j) {
+          file >> matrix[i][j];
+          matrix[j][i] = matrix[i][j]; // odbicie symetryczne
+        }
+      }
+    } else if (weight_format == "UPPER_ROW") {
+      for (int i = 0; i < size - 1; ++i) {
+        for (int j = i + 1; j < size; ++j) {
+          file >> matrix[i][j];
+          matrix[j][i] = matrix[i][j]; // odbicie symetryczne
+        }
+      }
+      for (int i = 0; i < size; ++i)
+        matrix[i][i] = 0; // diagonal zerowany
+    } else {
+      // domyślnie FULL_MATRIX
+      for (int i = 0; i < size; ++i) {
+        for (int j = 0; j < size; ++j) {
+          file >> matrix[i][j];
+        }
       }
     }
   }
@@ -110,6 +136,56 @@ int calculateCost(const vector<int> &path, const vector<vector<int>> &matrix) {
   return cost;
 }
 
+// Implementacja nastepnej permutacji leksykograficznej
+// Algorytm:
+//  1. Szukamy od konca pierwszej pary gdzie path[i] < path[i+1] (punkt
+//  zlamania)
+//  2. Szukamy od konca najmniejszego elementu wiekszego od path[i]
+//  3. Zamieniamy je miejscami
+//  4. Odwracamy ogon od i+1 do konca
+// Zwraca false jesli brak nastepnej permutacji (calosc malejaca)
+bool nextPermutation(vector<int>::iterator first, vector<int>::iterator last) {
+  if (first == last || first + 1 == last)
+    return false;
+
+  auto i = last - 1;
+
+  while (true) {
+    auto prev = i;
+    --i;
+
+    if (*i < *prev) {
+      // znaleziono punkt zlamania
+      auto j = last - 1;
+      while (!(*i < *j))
+        --j; // szukamy najmniejszego wiekszego od *i
+      iter_swap(i, j);
+      reverse(prev, last);
+      return true;
+    }
+
+    if (i == first) {
+      // cala sekwencja jest malejaca - brak nastepnej permutacji
+      reverse(first, last);
+      return false;
+    }
+  }
+}
+
+// Implementacja tasowania Fisher-Yates
+void fisherYatesShuffle(vector<int>::iterator first, vector<int>::iterator last,
+                        mt19937 &rng) {
+  int n = distance(first, last);
+  if (n <= 1)
+    return;
+
+  for (int i = n - 1; i > 0; --i) {
+    uniform_int_distribution<int> dist(0, i);
+    int j = dist(rng);
+    iter_swap(first + i, first + j);
+  }
+}
+
 // --- Brute Force ---
 int bruteForce(const vector<vector<int>> &matrix) {
   int size = matrix.size();
@@ -121,7 +197,7 @@ int bruteForce(const vector<vector<int>> &matrix) {
     int current_cost = calculateCost(path, matrix);
     if (current_cost < min_cost)
       min_cost = current_cost;
-  } while (next_permutation(path.begin() + 1, path.end()));
+  } while (nextPermutation(path.begin() + 1, path.end()));
   // +1 by zawsze zaczynac z zera (optymalizacja dla symetrycznych i cykli)
 
   return min_cost;
@@ -138,7 +214,7 @@ int randomSearch(const vector<vector<int>> &matrix, int local_repeats) {
   int min_cost = numeric_limits<int>::max();
 
   for (int i = 0; i < local_repeats; ++i) {
-    shuffle(path.begin() + 1, path.end(), g);
+    fisherYatesShuffle(path.begin() + 1, path.end(), g);
     int current_cost = calculateCost(path, matrix);
     if (current_cost < min_cost)
       min_cost = current_cost;
@@ -196,8 +272,6 @@ void exploreRNN(const vector<vector<int>> &matrix, int start_node,
   }
 
   // pruning do optymalzacji
-  // jesli juz teraz jest gorszy lub rowny najlepszemu wynikowi z innej galezi,
-  // to koniec
   if (current_cost >= best_overall_cost) {
     return;
   }
