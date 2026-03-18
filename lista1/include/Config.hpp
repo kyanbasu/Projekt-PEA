@@ -2,6 +2,12 @@
 #include <string>
 #include <vector>
 
+struct Node {
+    int id;
+    double x;
+    double y;
+};
+
 struct Config
 {
     std::string data_folder;
@@ -14,3 +20,4 @@ struct Config
 };
 
 Config loadConfig(const std::string &filename);
+std::vector<std::vector<int>> loadMatrix(const std::string& filepath, int& size);
