@@ -1,13 +1,21 @@
 # Running info
 
+set frequencies with
+
 ```
 sudo cpupower -c 3 frequency-set -d 4200MHz -u 4200MHz
 ```
 
-or
+or by setting power profile
 
 ```
 sudo cpupower -c 3 frequency-set -g performance
+```
+
+compile
+
+```
+make clean & make
 ```
 
 then run with
