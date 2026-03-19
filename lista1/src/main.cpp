@@ -5,7 +5,6 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -73,9 +72,8 @@ int main() {
     if (cfg.show_progress)
       cout << "Znaleziono " << cfg.instances.size() << " plikow.\n";
 
-    // bufor na wyniki
-    ostringstream buf;
-    buf << "Instance,Size,Algorithm,Iteration,Time_ms,Cost\n";
+    ofstream csvOut(cfg.output_file);
+    csvOut << "Instance,Size,Algorithm,Iteration,Time_ms,Cost\n";
 
     for (const auto &inst_name : cfg.instances) {
       int size = 0;
@@ -111,12 +109,13 @@ int main() {
       for (auto &ar : algos) {
         auto [best, avg_t] = summarise(ar.results);
 
-        // zapisanie kazdej iteracji do bufora
+        // zapisanie kazdej instancji bezposrednio do pliku
         for (int i = 0; i < (int)ar.results.size(); ++i) {
-          buf << inst_name << "," << size << "," << ar.name << "," << (i + 1)
-              << "," << ar.results[i].first << "," << ar.results[i].second
-              << "\n";
+          csvOut << inst_name << "," << size << "," << ar.name << "," << (i + 1)
+                 << "," << ar.results[i].first << "," << ar.results[i].second
+                 << "\n";
         }
+        csvOut.flush();
 
         if (cfg.show_progress)
           cout << "   [" << ar.name << "] Avg: " << avg_t
@@ -124,9 +123,6 @@ int main() {
       }
     }
 
-    // zapisanie bufora do pliku
-    ofstream csvOut(cfg.output_file);
-    csvOut << buf.str();
     csvOut.close();
     if (cfg.show_progress)
       cout << "\nWyniki zapisano do " << cfg.output_file << "\n";
@@ -138,8 +134,8 @@ int main() {
       cout << "Brute Force dla grafow losowych o rozmiarach 6 do 15...\n";
     }
 
-    ostringstream bfBuf;
-    bfBuf << "Symmetric,Size,BestCost,Time_ms\n";
+    ofstream bfOut("bf_results.csv");
+    bfOut << "Symmetric,Size,BestCost,Time_ms\n";
 
     for (int size = 6; size <= 15; ++size) {
       vector<vector<int>> matrix_sym = generateRandomMatrix(size, true);
@@ -147,7 +143,8 @@ int main() {
                                      1, false, "");
       int best_sym = sym_runs[0].second;
       double t_sym = sym_runs[0].first;
-      bfBuf << "1," << size << "," << best_sym << "," << t_sym << "\n";
+      bfOut << "1," << size << "," << best_sym << "," << t_sym << "\n";
+      bfOut.flush();
       if (cfg.show_progress)
         cout << "BF Symetryczny (N=" << setw(2) << size << ") -> " << setw(10)
              << t_sym << " ms | Koszt: " << best_sym << "\n";
@@ -157,14 +154,13 @@ int main() {
                                       1, false, "");
       int best_asym = asym_runs[0].second;
       double t_asym = asym_runs[0].first;
-      bfBuf << "0," << size << "," << best_asym << "," << t_asym << "\n";
+      bfOut << "0," << size << "," << best_asym << "," << t_asym << "\n";
+      bfOut.flush();
       if (cfg.show_progress)
         cout << "BF Asymetryczny(N=" << setw(2) << size << ") -> " << setw(10)
              << t_asym << " ms | Koszt: " << best_asym << "\n";
     }
 
-    ofstream bfOut("bf_results.csv");
-    bfOut << bfBuf.str();
     bfOut.close();
 
     if (cfg.show_progress)

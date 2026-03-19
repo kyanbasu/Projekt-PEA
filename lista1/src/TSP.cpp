@@ -16,12 +16,7 @@ int calculateCost(const vector<int> &path, const vector<vector<int>> &matrix) {
 }
 
 // Implementacja nastepnej permutacji leksykograficznej
-// Algorytm:
-//  1. Szukamy od konca pierwszej pary gdzie path[i] < path[i+1] (punkt
-//  zlamania)
-//  2. Szukamy od konca najmniejszego elementu wiekszego od path[i]
-//  3. Zamieniamy je miejscami
-//  4. Odwracamy ogon od i+1 do konca
+// Zwraca true jesli istnieje nastepna permutacja
 // Zwraca false jesli brak nastepnej permutacji (calosc malejaca)
 bool nextPermutation(vector<int>::iterator first, vector<int>::iterator last) {
   if (first == last || first + 1 == last)
@@ -68,16 +63,35 @@ void fisherYatesShuffle(vector<int>::iterator first, vector<int>::iterator last,
 // --- Brute Force ---
 int bruteForce(const vector<vector<int>> &matrix) {
   int size = matrix.size();
+  if (size == 0)
+    return 0;
+
   vector<int> path(size);
   iota(path.begin(), path.end(), 0);
 
+  bool is_symmetric = true;
+  for (int i = 0; i < size && is_symmetric; ++i) {
+    for (int j = 0; j < i; ++j) {
+      if (matrix[i][j] != matrix[j][i]) {
+        is_symmetric = false;
+        break;
+      }
+    }
+  }
+
   int min_cost = numeric_limits<int>::max();
   do {
+    // optymalizacja dla symetrycznych, bierze pod uwage odbicie lustrzane
+    // i ignoruje powtórki
+    if (is_symmetric && size > 2 && path[1] > path.back()) {
+      continue;
+    }
+
     int current_cost = calculateCost(path, matrix);
     if (current_cost < min_cost)
       min_cost = current_cost;
   } while (nextPermutation(path.begin() + 1, path.end()));
-  // +1 by zawsze zaczynac z zera (optymalizacja dla symetrycznych i cykli)
+  // optymalizacja cyklowa +1
 
   return min_cost;
 }
