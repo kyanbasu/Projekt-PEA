@@ -30,7 +30,7 @@ void printProgress(int current, int total, const string &prefix) {
     cout << endl;
 }
 
-// Makro do mierzenia czasu z lapania wyjatkow OOM np w rzarlocznym BFS
+// Makro do mierzenia czasu
 template <typename Func>
 vector<pair<double, int>> measureTimeAll(Func function, int repeats,
                                          bool show_progress,
