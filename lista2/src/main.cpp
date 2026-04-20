@@ -81,7 +81,7 @@ int main() {
       cout << "Znaleziono " << cfg.instances.size() << " plikow.\n";
 
     ofstream csvOut(cfg.output_file);
-    csvOut << "Instance,Size,Algorithm,Iteration,Time_ms,Cost\n";
+    csvOut << "Instance,Size,Algorithm,Iteration,Time_ms,Cost,MemKB\n";
 
     for (const auto &inst_name : cfg.instances) {
       int size = 0;
@@ -132,7 +132,7 @@ int main() {
         for (int i = 0; i < (int)ar.results.size(); ++i) {
           csvOut << inst_name << "," << size << "," << ar.name << "," << (i + 1)
                  << "," << ar.results[i].first << "," << ar.results[i].second
-                 << "\n";
+                 << "," << mem_usage << "\n";
         }
         csvOut.flush();
 
