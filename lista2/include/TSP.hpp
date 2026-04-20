@@ -9,6 +9,6 @@ int nearestNeighbour(const std::vector<std::vector<int>>& matrix);
 int repetitiveNearestNeighbour(const std::vector<std::vector<int>>& matrix);
 
 // Metody Branch and Bound dla Listy 2
-int branchAndBoundBFS(const std::vector<std::vector<int>>& matrix, int initial_upper_bound);
-int branchAndBoundDFS(const std::vector<std::vector<int>>& matrix, int initial_upper_bound);
-int branchAndBoundLC(const std::vector<std::vector<int>>& matrix, int initial_upper_bound);
+int branchAndBoundBFS(const std::vector<std::vector<int>>& matrix, int initial_upper_bound, int time_limit_min);
+int branchAndBoundDFS(const std::vector<std::vector<int>>& matrix, int initial_upper_bound, int time_limit_min);
+int branchAndBoundLC(const std::vector<std::vector<int>>& matrix, int initial_upper_bound, int time_limit_min);

@@ -16,6 +16,7 @@ struct Config
     int repeats;
     int rand_local_repeats; // ile losowych sciezek wygenerowac dla jednej instancji
     int upper_bound_method; // (0: INF, 1: RAND, 2: NN, 3: RNN)
+    int time_limit_min; // limit czasu podany w minutach dla danej instancji
     std::vector<std::string> instances;
     int test_type;
 };

@@ -37,6 +37,8 @@ Config loadConfig(const std::string &filename) {
         cfg.rand_local_repeats = std::stoi(val);
       else if (key == "upper_bound_method")
         cfg.upper_bound_method = std::stoi(val);
+      else if (key == "time_limit_min")
+        cfg.time_limit_min = std::stoi(val);
       else if (key == "test_type")
         cfg.test_type = std::stoi(val);
     }

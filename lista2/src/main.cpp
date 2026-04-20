@@ -45,6 +45,9 @@ vector<pair<double, int>> measureTimeAll(Func function, int repeats,
         cost = function();
     } catch(const std::bad_alloc& e) {
         cost = -2; // Out of memory
+    } catch(const std::runtime_error& e) {
+        if (std::string(e.what()) == "MemoryLimit") cost = -2;
+        else if (std::string(e.what()) == "Timeout") cost = -3;
     }
     auto t1 = chrono::high_resolution_clock::now();
 
@@ -63,7 +66,7 @@ pair<int, double> summarise(const vector<pair<double, int>> &runs) {
   int best = runs[0].second;
   double sum_t = 0.0;
   for (const auto &[t, c] : runs) {
-    if (c != -1 && c != -2 && (best == -1 || best == -2 || c < best))
+    if (c != -1 && c != -2 && c != -3 && (best == -1 || best == -2 || best == -3 || c < best))
       best = c;
     sum_t += t;
   }
@@ -106,9 +109,9 @@ int main() {
       
       if(cfg.show_progress) cout << "Poczatkowe gorne ograniczenie (" << ub_name << "): " << (ub == numeric_limits<int>::max() ? -1 : ub) << "\n";
 
-      auto run_dfs = [&]() { return branchAndBoundDFS(matrix, ub); };
-      auto run_lc = [&]() { return branchAndBoundLC(matrix, ub); };
-      auto run_bfs = [&]() { return branchAndBoundBFS(matrix, ub); };
+      auto run_dfs = [&]() { return branchAndBoundDFS(matrix, ub, cfg.time_limit_min); };
+      auto run_lc = [&]() { return branchAndBoundLC(matrix, ub, cfg.time_limit_min); };
+      auto run_bfs = [&]() { return branchAndBoundBFS(matrix, ub, cfg.time_limit_min); };
 
       struct AlgoRun {
         string name;
@@ -136,6 +139,8 @@ int main() {
         if (cfg.show_progress) {
           if (best == -2) {
              cout << "   [" << ar.name << "] Przerwano algorytm z powodu braku pamieci (RAM: " << mem_usage << " KB)\n";
+          } else if (best == -3) {
+             cout << "   [" << ar.name << "] Przerwano algorytm z powodu przekroczenia limitu " << cfg.time_limit_min << " min\n";
           } else {
              cout << "   [" << ar.name << "] Avg: " << avg_t
                   << " ms | Best: " << best << " | RAM: " << mem_usage << " KB\n";

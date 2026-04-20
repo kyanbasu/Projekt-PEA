@@ -5,6 +5,8 @@
 #include <random>
 #include <queue>
 #include <stack>
+#include <chrono>
+#include <stdexcept>
 
 using namespace std;
 
@@ -196,9 +198,15 @@ BnBNode createChildNode(const BnBNode& parent, int next_city) {
     return child;
 }
 
-int branchAndBoundBFS(const vector<vector<int>>& matrix, int initial_upper_bound) {
+// --- BRANCH AND BOUND: Wersja BFS (Breadth-First Search) ---
+int branchAndBoundBFS(const vector<vector<int>>& matrix, int initial_upper_bound, int time_limit_min) {
     int best_cost = initial_upper_bound;
     queue<BnBNode> q;
+
+    double timeout_ms = time_limit_min * 60.0 * 1000.0;
+    auto start_time = chrono::high_resolution_clock::now();
+    int iter_count = 0;
+    const size_t MAX_QUEUE_SIZE = 2000000;
 
     BnBNode root = createRootNode(matrix);
     if(root.cost >= best_cost) return best_cost;
@@ -207,6 +215,13 @@ int branchAndBoundBFS(const vector<vector<int>>& matrix, int initial_upper_bound
     int n = matrix.size();
 
     while (!q.empty()) {
+        if ((++iter_count & 1023) == 0) {
+            auto now = chrono::high_resolution_clock::now();
+            chrono::duration<double, milli> elapsed = now - start_time;
+            if (elapsed.count() > timeout_ms) throw std::runtime_error("Timeout");
+        }
+        if (q.size() > MAX_QUEUE_SIZE) throw std::runtime_error("MemoryLimit");
+
         BnBNode current = q.front();
         q.pop();
 
@@ -234,9 +249,14 @@ int branchAndBoundBFS(const vector<vector<int>>& matrix, int initial_upper_bound
     return best_cost;
 }
 
-int branchAndBoundDFS(const vector<vector<int>>& matrix, int initial_upper_bound) {
+int branchAndBoundDFS(const vector<vector<int>>& matrix, int initial_upper_bound, int time_limit_min) {
     int best_cost = initial_upper_bound;
     stack<BnBNode> s;
+
+    double timeout_ms = time_limit_min * 60.0 * 1000.0;
+    auto start_time = chrono::high_resolution_clock::now();
+    int iter_count = 0;
+    const size_t MAX_QUEUE_SIZE = 2000000;
 
     BnBNode root = createRootNode(matrix);
     if(root.cost >= best_cost) return best_cost;
@@ -245,6 +265,13 @@ int branchAndBoundDFS(const vector<vector<int>>& matrix, int initial_upper_bound
     int n = matrix.size();
 
     while (!s.empty()) {
+        if ((++iter_count & 1023) == 0) {
+            auto now = chrono::high_resolution_clock::now();
+            chrono::duration<double, milli> elapsed = now - start_time;
+            if (elapsed.count() > timeout_ms) throw std::runtime_error("Timeout");
+        }
+        if (s.size() > MAX_QUEUE_SIZE) throw std::runtime_error("MemoryLimit");
+
         BnBNode current = s.top();
         s.pop();
 
@@ -259,6 +286,7 @@ int branchAndBoundDFS(const vector<vector<int>>& matrix, int initial_upper_bound
             continue;
         }
 
+        // Dodawanie w odwrotnej kolejnosci nie ma wplywu na poprawnosc, ale mozna dodawac normalnie
         for (int i = 0; i < n; ++i) {
             if (current.matrix[current.current_city][i] != -1) {
                 BnBNode child = createChildNode(current, i);
@@ -272,9 +300,15 @@ int branchAndBoundDFS(const vector<vector<int>>& matrix, int initial_upper_bound
     return best_cost;
 }
 
-int branchAndBoundLC(const vector<vector<int>>& matrix, int initial_upper_bound) {
+// --- BRANCH AND BOUND: Wersja Lowest-Cost (Best-First Search) ---
+int branchAndBoundLC(const vector<vector<int>>& matrix, int initial_upper_bound, int time_limit_min) {
     int best_cost = initial_upper_bound;
     priority_queue<BnBNode, vector<BnBNode>, CompareBnBNode> pq;
+
+    double timeout_ms = time_limit_min * 60.0 * 1000.0;
+    auto start_time = chrono::high_resolution_clock::now();
+    int iter_count = 0;
+    const size_t MAX_QUEUE_SIZE = 2000000;
 
     BnBNode root = createRootNode(matrix);
     if(root.cost >= best_cost) return best_cost;
@@ -283,6 +317,13 @@ int branchAndBoundLC(const vector<vector<int>>& matrix, int initial_upper_bound)
     int n = matrix.size();
 
     while (!pq.empty()) {
+        if ((++iter_count & 1023) == 0) {
+            auto now = chrono::high_resolution_clock::now();
+            chrono::duration<double, milli> elapsed = now - start_time;
+            if (elapsed.count() > timeout_ms) throw std::runtime_error("Timeout");
+        }
+        if (pq.size() > MAX_QUEUE_SIZE) throw std::runtime_error("MemoryLimit");
+
         BnBNode current = pq.top();
         pq.pop();
 
