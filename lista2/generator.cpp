@@ -24,7 +24,7 @@ void saveMatrixTSPLIB(const vector<vector<int>>& mat, const string& name, bool i
 }
 
 int main() {
-    vector<int> sizes = {6, 8, 10, 12, 13, 14, 15};
+    vector<int> sizes = {6, 8, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25};
     for(int s : sizes) {
         auto sym_mat = generateRandomMatrix(s, true);
         saveMatrixTSPLIB(sym_mat, "sym_0" + (s < 10 ? "0" + to_string(s) : to_string(s)) + ".tsp", true);
