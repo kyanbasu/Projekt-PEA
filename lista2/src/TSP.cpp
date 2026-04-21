@@ -199,20 +199,22 @@ BnBNode createChildNode(const BnBNode& parent, int next_city) {
 }
 
 // --- BRANCH AND BOUND: Wersja BFS (Breadth-First Search) ---
-int branchAndBoundBFS(const vector<vector<int>>& matrix, int initial_upper_bound, int time_limit_min) {
+std::pair<int, long> branchAndBoundBFS(const vector<vector<int>>& matrix, int initial_upper_bound, int time_limit_min, int memory_limit_mb) {
     int best_cost = initial_upper_bound;
     queue<BnBNode> q;
 
     double timeout_ms = time_limit_min * 60.0 * 1000.0;
     auto start_time = chrono::high_resolution_clock::now();
     int iter_count = 0;
-    const size_t MAX_QUEUE_SIZE = 2000000;
+    
+    int n = matrix.size();
+    size_t estimated_node_size = sizeof(BnBNode) + n * n * sizeof(int) + n * sizeof(int);
+    size_t MAX_QUEUE_SIZE = (static_cast<size_t>(memory_limit_mb) * 1024 * 1024) / estimated_node_size;
+    size_t max_q_size = 0;
 
     BnBNode root = createRootNode(matrix);
-    if(root.cost >= best_cost) return best_cost;
+    if(root.cost >= best_cost) return {best_cost, 0};
     q.push(root);
-
-    int n = matrix.size();
 
     while (!q.empty()) {
         if ((++iter_count & 1023) == 0) {
@@ -220,6 +222,7 @@ int branchAndBoundBFS(const vector<vector<int>>& matrix, int initial_upper_bound
             chrono::duration<double, milli> elapsed = now - start_time;
             if (elapsed.count() > timeout_ms) throw std::runtime_error("Timeout");
         }
+        if (q.size() > max_q_size) max_q_size = q.size();
         if (q.size() > MAX_QUEUE_SIZE) throw std::runtime_error("MemoryLimit");
 
         BnBNode current = q.front();
@@ -246,23 +249,26 @@ int branchAndBoundBFS(const vector<vector<int>>& matrix, int initial_upper_bound
         }
     }
 
-    return best_cost;
+    long mem_usage_kb = (max_q_size * estimated_node_size) / 1024;
+    return {best_cost, mem_usage_kb};
 }
 
-int branchAndBoundDFS(const vector<vector<int>>& matrix, int initial_upper_bound, int time_limit_min) {
+std::pair<int, long> branchAndBoundDFS(const vector<vector<int>>& matrix, int initial_upper_bound, int time_limit_min, int memory_limit_mb) {
     int best_cost = initial_upper_bound;
     stack<BnBNode> s;
 
     double timeout_ms = time_limit_min * 60.0 * 1000.0;
     auto start_time = chrono::high_resolution_clock::now();
     int iter_count = 0;
-    const size_t MAX_QUEUE_SIZE = 2000000;
+    
+    int n = matrix.size();
+    size_t estimated_node_size = sizeof(BnBNode) + n * n * sizeof(int) + n * sizeof(int);
+    size_t MAX_QUEUE_SIZE = (static_cast<size_t>(memory_limit_mb) * 1024 * 1024) / estimated_node_size;
+    size_t max_s_size = 0;
 
     BnBNode root = createRootNode(matrix);
-    if(root.cost >= best_cost) return best_cost;
+    if(root.cost >= best_cost) return {best_cost, 0};
     s.push(root);
-
-    int n = matrix.size();
 
     while (!s.empty()) {
         if ((++iter_count & 1023) == 0) {
@@ -270,6 +276,7 @@ int branchAndBoundDFS(const vector<vector<int>>& matrix, int initial_upper_bound
             chrono::duration<double, milli> elapsed = now - start_time;
             if (elapsed.count() > timeout_ms) throw std::runtime_error("Timeout");
         }
+        if (s.size() > max_s_size) max_s_size = s.size();
         if (s.size() > MAX_QUEUE_SIZE) throw std::runtime_error("MemoryLimit");
 
         BnBNode current = s.top();
@@ -297,24 +304,27 @@ int branchAndBoundDFS(const vector<vector<int>>& matrix, int initial_upper_bound
         }
     }
 
-    return best_cost;
+    long mem_usage_kb = (max_s_size * estimated_node_size) / 1024;
+    return {best_cost, mem_usage_kb};
 }
 
 // --- BRANCH AND BOUND: Wersja Lowest-Cost (Best-First Search) ---
-int branchAndBoundLC(const vector<vector<int>>& matrix, int initial_upper_bound, int time_limit_min) {
+std::pair<int, long> branchAndBoundLC(const vector<vector<int>>& matrix, int initial_upper_bound, int time_limit_min, int memory_limit_mb) {
     int best_cost = initial_upper_bound;
     priority_queue<BnBNode, vector<BnBNode>, CompareBnBNode> pq;
 
     double timeout_ms = time_limit_min * 60.0 * 1000.0;
     auto start_time = chrono::high_resolution_clock::now();
     int iter_count = 0;
-    const size_t MAX_QUEUE_SIZE = 2000000;
+    
+    int n = matrix.size();
+    size_t estimated_node_size = sizeof(BnBNode) + n * n * sizeof(int) + n * sizeof(int);
+    size_t MAX_QUEUE_SIZE = (static_cast<size_t>(memory_limit_mb) * 1024 * 1024) / estimated_node_size;
+    size_t max_pq_size = 0;
 
     BnBNode root = createRootNode(matrix);
-    if(root.cost >= best_cost) return best_cost;
+    if(root.cost >= best_cost) return {best_cost, 0};
     pq.push(root);
-
-    int n = matrix.size();
 
     while (!pq.empty()) {
         if ((++iter_count & 1023) == 0) {
@@ -322,6 +332,7 @@ int branchAndBoundLC(const vector<vector<int>>& matrix, int initial_upper_bound,
             chrono::duration<double, milli> elapsed = now - start_time;
             if (elapsed.count() > timeout_ms) throw std::runtime_error("Timeout");
         }
+        if (pq.size() > max_pq_size) max_pq_size = pq.size();
         if (pq.size() > MAX_QUEUE_SIZE) throw std::runtime_error("MemoryLimit");
 
         BnBNode current = pq.top();
@@ -348,5 +359,6 @@ int branchAndBoundLC(const vector<vector<int>>& matrix, int initial_upper_bound,
         }
     }
 
-    return best_cost;
+    long mem_usage_kb = (max_pq_size * estimated_node_size) / 1024;
+    return {best_cost, mem_usage_kb};
 }
