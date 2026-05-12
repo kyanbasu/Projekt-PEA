@@ -3,12 +3,14 @@
 #include <limits>
 #include <numeric>
 #include <random>
-#include <queue>
-#include <stack>
 #include <chrono>
 #include <stdexcept>
+#include <cmath>
 
 using namespace std;
+
+// Globalny generator liczb losowych (deterministyczne ziarno dla powtarzalnosci)
+static mt19937 rng(42);
 
 int calculateCost(const vector<int> &path, const vector<vector<int>> &matrix) {
   int cost = 0;
@@ -21,12 +23,12 @@ int calculateCost(const vector<int> &path, const vector<vector<int>> &matrix) {
   return cost;
 }
 
-void fisherYatesShuffle(vector<int>::iterator first, vector<int>::iterator last, mt19937 &rng) {
+void fisherYatesShuffle(vector<int>::iterator first, vector<int>::iterator last, mt19937 &gen) {
   int n = distance(first, last);
   if (n <= 1) return;
   for (int i = n - 1; i > 0; --i) {
     uniform_int_distribution<int> dist(0, i);
-    int j = dist(rng);
+    int j = dist(gen);
     iter_swap(first + i, first + j);
   }
 }
@@ -36,11 +38,10 @@ int randomSearch(const vector<vector<int>> &matrix, int local_repeats) {
   vector<int> path(size);
   iota(path.begin(), path.end(), 0);
 
-  static mt19937 g(42);
   int min_cost = numeric_limits<int>::max();
 
   for (int i = 0; i < local_repeats; ++i) {
-    fisherYatesShuffle(path.begin() + 1, path.end(), g);
+    fisherYatesShuffle(path.begin() + 1, path.end(), rng);
     int current_cost = calculateCost(path, matrix);
     if (current_cost < min_cost) min_cost = current_cost;
   }
@@ -115,250 +116,231 @@ int repetitiveNearestNeighbour(const vector<vector<int>> &matrix) {
   return best_cost;
 }
 
-struct BnBNode {
-    vector<vector<int>> matrix; 
-    vector<int> path; 
-    int cost; 
-    int current_city;
-    int level; 
-};
+// --- Generowanie rozwiazania poczatkowego ---
 
-struct CompareBnBNode {
-    bool operator()(const BnBNode& a, const BnBNode& b) const {
-        return a.cost > b.cost;
-    }
-};
+vector<int> generateRandomPath(int size) {
+    vector<int> path(size);
+    iota(path.begin(), path.end(), 0);
+    fisherYatesShuffle(path.begin() + 1, path.end(), rng);
+    return path;
+}
 
-// Redukcja macierzy Little'a i obliczanie dodatku kosztowego do LB
-int reduceMatrix(vector<vector<int>>& mat) {
-    int reduction_sum = 0;
-    int n = mat.size();
+vector<int> nearestNeighbourPath(const vector<vector<int>> &matrix) {
+  int n = matrix.size();
+  vector<bool> visited(n, false);
+  vector<int> path;
+  int current_node = 0;
+  visited[current_node] = true;
+  path.push_back(current_node);
+
+  for (int step = 1; step < n; ++step) {
+    int next_node = -1;
+    int min_weight = numeric_limits<int>::max();
 
     for (int i = 0; i < n; ++i) {
-        int min_val = numeric_limits<int>::max();
-        for (int j = 0; j < n; ++j) {
-            if (mat[i][j] != -1 && mat[i][j] < min_val) min_val = mat[i][j];
-        }
-        if (min_val != numeric_limits<int>::max() && min_val > 0) {
-            reduction_sum += min_val;
-            for (int j = 0; j < n; ++j) {
-                if (mat[i][j] != -1) mat[i][j] -= min_val;
-            }
-        }
+      if (!visited[i] && matrix[current_node][i] != -1 && matrix[current_node][i] < min_weight) {
+        min_weight = matrix[current_node][i];
+        next_node = i;
+      }
     }
+    if (next_node == -1) break; // cannot continue
 
-    for (int j = 0; j < n; ++j) {
-        int min_val = numeric_limits<int>::max();
+    visited[next_node] = true;
+    path.push_back(next_node);
+    current_node = next_node;
+  }
+  return path;
+}
+
+vector<int> repetitiveNearestNeighbourPath(const vector<vector<int>> &matrix) {
+  int n = matrix.size();
+  vector<int> best_path;
+  int best_cost = numeric_limits<int>::max();
+
+  for (int start_node = 0; start_node < n; ++start_node) {
+    vector<bool> visited(n, false);
+    vector<int> path;
+    int current_node = start_node;
+    visited[current_node] = true;
+    path.push_back(current_node);
+    int total_cost = 0;
+    bool valid = true;
+
+    for (int step = 1; step < n; ++step) {
+        int next_node = -1;
+        int min_weight = numeric_limits<int>::max();
         for (int i = 0; i < n; ++i) {
-            if (mat[i][j] != -1 && mat[i][j] < min_val) min_val = mat[i][j];
+          if (!visited[i] && matrix[current_node][i] != -1 && matrix[current_node][i] < min_weight) {
+            min_weight = matrix[current_node][i];
+            next_node = i;
+          }
         }
-        if (min_val != numeric_limits<int>::max() && min_val > 0) {
-            reduction_sum += min_val;
-            for (int i = 0; i < n; ++i) {
-                if (mat[i][j] != -1) mat[i][j] -= min_val;
-            }
-        }
+        if (next_node == -1) { valid = false; break; }
+        visited[next_node] = true;
+        path.push_back(next_node);
+        total_cost += min_weight;
+        current_node = next_node;
     }
-    return reduction_sum;
-}
-
-BnBNode createRootNode(const vector<vector<int>>& original_mat) {
-    BnBNode root;
-    root.matrix = original_mat;
-    root.path.push_back(0); // Start z wierzcholka 0
-    root.current_city = 0;
-    root.level = 1;
-    for(int i = 0; i < (int)root.matrix.size(); ++i) root.matrix[i][i] = -1; // Blokada powrotu do siebie samego (nie potrzebne jesli to 0)
-    root.cost = reduceMatrix(root.matrix);
-    return root;
-}
-
-BnBNode createChildNode(const BnBNode& parent, int next_city) {
-    BnBNode child;
-    child.matrix = parent.matrix;
-    child.path = parent.path;
-    child.path.push_back(next_city);
-    child.current_city = next_city;
-    child.level = parent.level + 1;
-
-    int edge_cost = parent.matrix[parent.current_city][next_city];
-    
-    // Zablokuj wiersz skad wyruszamy oraz kolumne do ktorej dotarlismy
-    int n = child.matrix.size();
-    for (int k = 0; k < n; ++k) {
-        child.matrix[parent.current_city][k] = -1;
-        child.matrix[k][next_city] = -1;
+    if (valid) {
+        if (matrix[current_node][start_node] == -1) valid = false;
+        else total_cost += matrix[current_node][start_node];
     }
-    // Blokada powrotu aby nie stworzyc wewnetrznego cyklu
-    child.matrix[next_city][child.path[0]] = -1;
 
-    int reduction = reduceMatrix(child.matrix);
-    child.cost = parent.cost + edge_cost + reduction;
+    if (valid && total_cost < best_cost) {
+        best_cost = total_cost;
+        best_path = path;
+    }
+  }
 
-    return child;
+  if (best_path.empty()) {
+      // fallback: generate random
+      best_path = generateRandomPath(n);
+  }
+  return best_path;
 }
 
-// --- BRANCH AND BOUND: Wersja BFS (Breadth-First Search) ---
-std::pair<int, long> branchAndBoundBFS(const vector<vector<int>>& matrix, int initial_upper_bound, int time_limit_min, int memory_limit_mb) {
-    int best_cost = initial_upper_bound;
-    queue<BnBNode> q;
+// --- Operacje sasiedztwa ---
+
+vector<int> swapNeighbour(const vector<int>& path) {
+    vector<int> neighbour = path;
+    int n = path.size();
+    if (n < 3) return neighbour;
+
+    uniform_int_distribution<int> dist(1, n - 1);
+    int i = dist(rng);
+    int j = dist(rng);
+    while (i == j) j = dist(rng);
+
+    swap(neighbour[i], neighbour[j]);
+    return neighbour;
+}
+
+vector<int> invertNeighbour(const vector<int>& path) {
+    vector<int> neighbour = path;
+    int n = path.size();
+    if (n < 3) return neighbour;
+
+    uniform_int_distribution<int> dist(1, n - 1);
+    int i = dist(rng);
+    int j = dist(rng);
+    while (i == j) j = dist(rng);
+
+    if (i > j) swap(i, j);
+    reverse(neighbour.begin() + i, neighbour.begin() + j + 1);
+    return neighbour;
+}
+
+vector<int> insertNeighbour(const vector<int>& path) {
+    vector<int> neighbour = path;
+    int n = path.size();
+    if (n < 3) return neighbour;
+
+    uniform_int_distribution<int> dist(1, n - 1);
+    int i = dist(rng);
+    int j = dist(rng);
+    while (i == j) j = dist(rng);
+
+    int city = neighbour[i];
+    neighbour.erase(neighbour.begin() + i);
+    neighbour.insert(neighbour.begin() + j, city);
+    return neighbour;
+}
+
+// --- Symulowane wyzarzanie (SA) ---
+
+SAResult simulatedAnnealing(const std::vector<std::vector<int>>& matrix,
+                            double initial_temp, double final_temp,
+                            double cooling_rate, int iter_per_temp,
+                            int neighbourhood, int init_method,
+                            int time_limit_min) {
+    SAResult result;
+    int n = matrix.size();
+
+    // Generowanie rozwiazania poczatkowego
+    vector<int> current_path;
+    if (init_method == 1) {
+        current_path = nearestNeighbourPath(matrix);
+    } else if (init_method == 2) {
+        current_path = repetitiveNearestNeighbourPath(matrix);
+    } else {
+        current_path = generateRandomPath(n);
+    }
+
+    // Zabezpieczenie: jesli sciezka ma inny rozmiar, wygeneruj losowa
+    if ((int)current_path.size() != n) {
+        current_path = generateRandomPath(n);
+    }
+
+    int current_cost = calculateCost(current_path, matrix);
+
+    vector<int> best_path = current_path;
+    int best_cost = current_cost;
+
+    double temperature = initial_temp;
 
     double timeout_ms = time_limit_min * 60.0 * 1000.0;
     auto start_time = chrono::high_resolution_clock::now();
-    int iter_count = 0;
-    
-    int n = matrix.size();
-    size_t estimated_node_size = sizeof(BnBNode) + n * n * sizeof(int) + n * sizeof(int);
-    size_t MAX_QUEUE_SIZE = (static_cast<size_t>(memory_limit_mb) * 1024 * 1024) / estimated_node_size;
-    size_t max_q_size = 0;
+    int64_t iter_count = 0;
 
-    BnBNode root = createRootNode(matrix);
-    if(root.cost >= best_cost) return {best_cost, 0};
-    q.push(root);
+    // Zapisujemy historie kosztu dla analizy
+    result.cost_history.push_back(current_cost);
 
-    while (!q.empty()) {
+    while (temperature > final_temp) {
+        // Sprawdzanie timeout
         if ((++iter_count & 1023) == 0) {
             auto now = chrono::high_resolution_clock::now();
             chrono::duration<double, milli> elapsed = now - start_time;
             if (elapsed.count() > timeout_ms) throw std::runtime_error("Timeout");
         }
-        if (q.size() > max_q_size) max_q_size = q.size();
-        if (q.size() > MAX_QUEUE_SIZE) throw std::runtime_error("MemoryLimit");
 
-        BnBNode current = q.front();
-        q.pop();
+        for (int i = 0; i < iter_per_temp; ++i) {
+            // Generowanie sasiada
+            vector<int> new_path;
+            if (neighbourhood == 1) {
+                new_path = swapNeighbour(current_path);
+            } else if (neighbourhood == 2) {
+                new_path = invertNeighbour(current_path);
+            } else {
+                new_path = insertNeighbour(current_path);
+            }
 
-        if (current.cost >= best_cost) continue;
+            int new_cost = calculateCost(new_path, matrix);
+            if (new_cost == numeric_limits<int>::max()) continue; // niepoprawna sciezka
 
-        if (current.level == n) {
-            int final_edge = current.matrix[current.current_city][current.path[0]];
-            int final_cost = current.cost;
-            if(final_edge != -1) final_cost += final_edge;
-            
-            if (final_cost < best_cost) best_cost = final_cost;
-            continue;
-        }
+            int delta = new_cost - current_cost;
 
-        for (int i = 0; i < n; ++i) {
-            if (current.matrix[current.current_city][i] != -1) {
-                BnBNode child = createChildNode(current, i);
-                if (child.cost < best_cost) {
-                    q.push(child);
+            if (delta < 0) {
+                // Akceptuj lepsze rozwiazanie
+                current_path = new_path;
+                current_cost = new_cost;
+
+                if (current_cost < best_cost) {
+                    best_path = current_path;
+                    best_cost = current_cost;
+                }
+            } else {
+                // Akceptuj gorsze z pewnym prawdopodobienstwem
+                double acceptance = exp(-delta / temperature);
+                uniform_real_distribution<double> dist(0.0, 1.0);
+                if (dist(rng) < acceptance) {
+                    current_path = new_path;
+                    current_cost = new_cost;
                 }
             }
         }
-    }
 
-    long mem_usage_kb = (max_q_size * estimated_node_size) / 1024;
-    return {best_cost, mem_usage_kb};
-}
+        // Schladzanie
+        temperature *= cooling_rate;
 
-std::pair<int, long> branchAndBoundDFS(const vector<vector<int>>& matrix, int initial_upper_bound, int time_limit_min, int memory_limit_mb) {
-    int best_cost = initial_upper_bound;
-    stack<BnBNode> s;
-
-    double timeout_ms = time_limit_min * 60.0 * 1000.0;
-    auto start_time = chrono::high_resolution_clock::now();
-    int iter_count = 0;
-    
-    int n = matrix.size();
-    size_t estimated_node_size = sizeof(BnBNode) + n * n * sizeof(int) + n * sizeof(int);
-    size_t MAX_QUEUE_SIZE = (static_cast<size_t>(memory_limit_mb) * 1024 * 1024) / estimated_node_size;
-    size_t max_s_size = 0;
-
-    BnBNode root = createRootNode(matrix);
-    if(root.cost >= best_cost) return {best_cost, 0};
-    s.push(root);
-
-    while (!s.empty()) {
-        if ((++iter_count & 1023) == 0) {
-            auto now = chrono::high_resolution_clock::now();
-            chrono::duration<double, milli> elapsed = now - start_time;
-            if (elapsed.count() > timeout_ms) throw std::runtime_error("Timeout");
-        }
-        if (s.size() > max_s_size) max_s_size = s.size();
-        if (s.size() > MAX_QUEUE_SIZE) throw std::runtime_error("MemoryLimit");
-
-        BnBNode current = s.top();
-        s.pop();
-
-        if (current.cost >= best_cost) continue;
-
-        if (current.level == n) {
-            int final_edge = current.matrix[current.current_city][current.path[0]];
-            int final_cost = current.cost;
-            if(final_edge != -1) final_cost += final_edge;
-            
-            if (final_cost < best_cost) best_cost = final_cost;
-            continue;
-        }
-
-        // Dodawanie w odwrotnej kolejnosci nie ma wplywu na poprawnosc, ale mozna dodawac normalnie
-        for (int i = 0; i < n; ++i) {
-            if (current.matrix[current.current_city][i] != -1) {
-                BnBNode child = createChildNode(current, i);
-                if (child.cost < best_cost) {
-                    s.push(child);
-                }
-            }
+        // Co pewien czas zapisz historie
+        if ((iter_count & 63) == 0) {
+            result.cost_history.push_back(best_cost);
         }
     }
 
-    long mem_usage_kb = (max_s_size * estimated_node_size) / 1024;
-    return {best_cost, mem_usage_kb};
-}
+    result.best_path = best_path;
+    result.best_cost = best_cost;
+    result.mem_kb = 0; // Pomijalne, poniewaz SA nie uzywa zadnych istotnie duzych struktur
 
-// --- BRANCH AND BOUND: Wersja Lowest-Cost (Best-First Search) ---
-std::pair<int, long> branchAndBoundLC(const vector<vector<int>>& matrix, int initial_upper_bound, int time_limit_min, int memory_limit_mb) {
-    int best_cost = initial_upper_bound;
-    priority_queue<BnBNode, vector<BnBNode>, CompareBnBNode> pq;
-
-    double timeout_ms = time_limit_min * 60.0 * 1000.0;
-    auto start_time = chrono::high_resolution_clock::now();
-    int iter_count = 0;
-    
-    int n = matrix.size();
-    size_t estimated_node_size = sizeof(BnBNode) + n * n * sizeof(int) + n * sizeof(int);
-    size_t MAX_QUEUE_SIZE = (static_cast<size_t>(memory_limit_mb) * 1024 * 1024) / estimated_node_size;
-    size_t max_pq_size = 0;
-
-    BnBNode root = createRootNode(matrix);
-    if(root.cost >= best_cost) return {best_cost, 0};
-    pq.push(root);
-
-    while (!pq.empty()) {
-        if ((++iter_count & 1023) == 0) {
-            auto now = chrono::high_resolution_clock::now();
-            chrono::duration<double, milli> elapsed = now - start_time;
-            if (elapsed.count() > timeout_ms) throw std::runtime_error("Timeout");
-        }
-        if (pq.size() > max_pq_size) max_pq_size = pq.size();
-        if (pq.size() > MAX_QUEUE_SIZE) throw std::runtime_error("MemoryLimit");
-
-        BnBNode current = pq.top();
-        pq.pop();
-
-        if (current.cost >= best_cost) continue;
-
-        if (current.level == n) {
-            int final_edge = current.matrix[current.current_city][current.path[0]];
-            int final_cost = current.cost;
-            if(final_edge != -1) final_cost += final_edge;
-            
-            if (final_cost < best_cost) best_cost = final_cost;
-            continue;
-        }
-
-        for (int i = 0; i < n; ++i) {
-            if (current.matrix[current.current_city][i] != -1) {
-                BnBNode child = createChildNode(current, i);
-                if (child.cost < best_cost) {
-                    pq.push(child);
-                }
-            }
-        }
-    }
-
-    long mem_usage_kb = (max_pq_size * estimated_node_size) / 1024;
-    return {best_cost, mem_usage_kb};
+    return result;
 }

@@ -1,7 +1,7 @@
 CXX = clang++
 CXXFLAGS = -std=c++17 -Wall -O2 -I./include
 
-TARGET = lista2
+TARGET = lista3
 SOURCES = ./src/*.cpp
 
 all: $(TARGET)

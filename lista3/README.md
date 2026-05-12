@@ -21,7 +21,7 @@ make clean & make
 then run with
 
 ```
-taskset -c 3 ./lista2.out
+taskset -c 3 ./lista3.out
 ```
 
 and check frequency with
