@@ -23,6 +23,42 @@ int calculateCost(const vector<int> &path, const vector<vector<int>> &matrix) {
   return cost;
 }
 
+int calculateMST(const vector<vector<int>> &matrix) {
+    int n = matrix.size();
+    if (n <= 1) return 0;
+    
+    vector<int> min_e(n, numeric_limits<int>::max());
+    vector<bool> in_mst(n, false);
+    min_e[0] = 0;
+    int total_weight = 0;
+    
+    for (int i = 0; i < n; ++i) {
+        int v = -1;
+        for (int j = 0; j < n; ++j) {
+            if (!in_mst[j] && (v == -1 || min_e[j] < min_e[v])) {
+                v = j;
+            }
+        }
+        if (v == -1 || min_e[v] == numeric_limits<int>::max()) break; // graph not connected
+        
+        in_mst[v] = true;
+        total_weight += min_e[v];
+        
+        for (int u = 0; u < n; ++u) {
+            int weight = matrix[v][u];
+            int reverse_weight = matrix[u][v];
+            int edge_weight = numeric_limits<int>::max();
+            if (weight != -1) edge_weight = min(edge_weight, weight);
+            if (reverse_weight != -1) edge_weight = min(edge_weight, reverse_weight);
+            
+            if (edge_weight != numeric_limits<int>::max() && !in_mst[u] && edge_weight < min_e[u]) {
+                min_e[u] = edge_weight;
+            }
+        }
+    }
+    return total_weight;
+}
+
 void fisherYatesShuffle(vector<int>::iterator first, vector<int>::iterator last, mt19937 &gen) {
   int n = distance(first, last);
   if (n <= 1) return;
@@ -259,6 +295,44 @@ static double coolLogarithmic(double temp, double rate, int iter, double init_te
     return init_temp / (1.0 + rate * log(1.0 + iter));
 }
 
+double calculateInitialTemperature(const vector<vector<int>> &matrix, const vector<int>& initial_path, int neighbourhood, double target_acceptance = 0.99) {
+    int n = matrix.size();
+    int samples = 1000;
+    if (samples > n * n) samples = n * n;
+    
+    double sum_positive_delta = 0.0;
+    int count_positive = 0;
+    
+    vector<int> current = initial_path;
+    int cost = calculateCost(current, matrix);
+    
+    for (int i = 0; i < samples; ++i) {
+        vector<int> next_path;
+        if (neighbourhood == 1) next_path = swapNeighbour(current);
+        else if (neighbourhood == 2) next_path = invertNeighbour(current);
+        else next_path = insertNeighbour(current);
+        
+        int next_cost = calculateCost(next_path, matrix);
+        if (next_cost != numeric_limits<int>::max()) {
+            int delta = next_cost - cost;
+            if (delta > 0) {
+                sum_positive_delta += delta;
+                count_positive++;
+            }
+        }
+        
+        // Randomly move to next state to sample space
+        if (next_cost != numeric_limits<int>::max()) {
+            current = next_path;
+            cost = next_cost;
+        }
+    }
+    
+    if (count_positive == 0) return 1000.0; // fallback
+    double avg_delta = sum_positive_delta / count_positive;
+    return -avg_delta / log(target_acceptance);
+}
+
 SAResult simulatedAnnealing(const std::vector<std::vector<int>>& matrix,
                             double initial_temp, double final_temp,
                             double cooling_rate, int iter_per_temp,
@@ -286,8 +360,17 @@ SAResult simulatedAnnealing(const std::vector<std::vector<int>>& matrix,
 
     vector<int> best_path = current_path;
     int best_cost = current_cost;
+    
+    // Lower Bound z MST
+    result.lb = calculateMST(matrix);
 
     double temperature = initial_temp;
+    // Jesli temperatura ujemna, wyznacz automatycznie
+    if (temperature < 0) {
+        temperature = calculateInitialTemperature(matrix, current_path, neighbourhood, 0.99);
+        // Nadpisujemy zmienna local_init_temp na wypadek gdyby schematy chlodzenia z niej korzystaly
+        initial_temp = temperature;
+    }
 
     double timeout_ms = time_limit_min * 60.0 * 1000.0;
     auto start_time = chrono::high_resolution_clock::now();
@@ -347,6 +430,7 @@ SAResult simulatedAnnealing(const std::vector<std::vector<int>>& matrix,
         }
 
         if (timeout_hit) break;
+        if (best_cost <= result.lb) break; // Optymalne rozwiazanie, wczesne wyjscie
 
         // Schladzanie
         ++iter_count;
@@ -355,7 +439,7 @@ SAResult simulatedAnnealing(const std::vector<std::vector<int>>& matrix,
         } else if (cooling_schedule == 1) {
             temperature = coolLinear(temperature, cooling_rate, iter_count, initial_temp);
         } else if (cooling_schedule == 2) {
-            temperature = coolLogarithmic(temperature, cooling_rate, 0, initial_temp);
+            temperature = coolLogarithmic(temperature, cooling_rate, iter_count, initial_temp);
         }
         
         if (temperature < final_temp) temperature = final_temp;

@@ -3,6 +3,7 @@
 #include <utility>
 
 int calculateCost(const std::vector<int>& path, const std::vector<std::vector<int>>& matrix);
+int calculateMST(const std::vector<std::vector<int>>& matrix);
 
 // Heurystyki do generowania rozwiazania poczatkowego
 int randomSearch(const std::vector<std::vector<int>>& matrix, int local_repeats);
@@ -26,6 +27,7 @@ struct SAResult {
     int best_cost;
     long mem_kb;
     std::vector<double> cost_history; // do analizy zbieznosci
+    int lb; // Lower Bound z MST
 };
 
 SAResult simulatedAnnealing(const std::vector<std::vector<int>>& matrix,

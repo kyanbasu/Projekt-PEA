@@ -93,7 +93,7 @@ int main(int argc, char* argv[]) {
   if (argc > 1) config_path = argv[1];
   Config cfg = loadConfig(config_path);
 
-  // Build all parameter combinations
+  // Build combinations for One At a Time (OAT) testing
   struct ParamCombo {
     double cooling_rate;
     double initial_temp;
@@ -104,14 +104,33 @@ int main(int argc, char* argv[]) {
     int cooling_schedule;
   };
   vector<ParamCombo> combos;
-  for (double cr : cfg.sa.cooling_rates)
-    for (double it : cfg.sa.initial_temps)
-      for (double ft : cfg.sa.final_temps)
-        for (int ipt : cfg.sa.iter_per_temps)
-          for (int neigh : cfg.sa.neighbourhoods)
-            for (int init : cfg.sa.init_methods)
-              for (int cs : cfg.sa.cooling_schedules)
-                combos.push_back({cr, it, ft, ipt, neigh, init, cs});
+  
+  auto addCombo = [&](double cr, double it, double ft, int ipt, int neigh, int init, int cs) {
+      for (const auto& c : combos) {
+          if (c.cooling_rate == cr && c.initial_temp == it && c.final_temp == ft && 
+              c.iter_per_temp == ipt && c.neighbourhood == neigh && c.init_method == init && c.cooling_schedule == cs) return;
+      }
+      combos.push_back({cr, it, ft, ipt, neigh, init, cs});
+  };
+
+  // Baseline config (first elements of each list)
+  double b_cr = cfg.sa.cooling_rates.empty() ? 0.99 : cfg.sa.cooling_rates[0];
+  double b_it = cfg.sa.initial_temps.empty() ? -1.0 : cfg.sa.initial_temps[0];
+  double b_ft = cfg.sa.final_temps.empty() ? 0.1 : cfg.sa.final_temps[0];
+  int b_ipt = cfg.sa.iter_per_temps.empty() ? 100 : cfg.sa.iter_per_temps[0];
+  int b_neigh = cfg.sa.neighbourhoods.empty() ? 2 : cfg.sa.neighbourhoods[0];
+  int b_init = cfg.sa.init_methods.empty() ? 2 : cfg.sa.init_methods[0];
+  int b_cs = cfg.sa.cooling_schedules.empty() ? 0 : cfg.sa.cooling_schedules[0];
+
+  addCombo(b_cr, b_it, b_ft, b_ipt, b_neigh, b_init, b_cs);
+  
+  for (double cr : cfg.sa.cooling_rates) addCombo(cr, b_it, b_ft, b_ipt, b_neigh, b_init, b_cs);
+  for (double it : cfg.sa.initial_temps) addCombo(b_cr, it, b_ft, b_ipt, b_neigh, b_init, b_cs);
+  for (double ft : cfg.sa.final_temps) addCombo(b_cr, b_it, ft, b_ipt, b_neigh, b_init, b_cs);
+  for (int ipt : cfg.sa.iter_per_temps) addCombo(b_cr, b_it, b_ft, ipt, b_neigh, b_init, b_cs);
+  for (int neigh : cfg.sa.neighbourhoods) addCombo(b_cr, b_it, b_ft, b_ipt, neigh, b_init, b_cs);
+  for (int init : cfg.sa.init_methods) addCombo(b_cr, b_it, b_ft, b_ipt, b_neigh, init, b_cs);
+  for (int cs : cfg.sa.cooling_schedules) addCombo(b_cr, b_it, b_ft, b_ipt, b_neigh, b_init, cs);
 
   if (cfg.show_progress) {
     cout << "Znaleziono " << cfg.instances.size() << " plikow.\n";
@@ -122,7 +141,7 @@ int main(int argc, char* argv[]) {
   ofstream csvOut(cfg.output_file);
   csvOut << "Instance,Size,Algorithm,InitMethod,Neighbourhood,"
          << "CoolingRate,InitTemp,FinalTemp,IterPerTemp,CoolingSchedule,"
-         << "Repeats,Time_ms,Cost\n";
+         << "Repeats,Time_ms,Cost,LB\n";
 
   for (const auto &inst_name : cfg.instances) {
     int size = 0;
@@ -138,12 +157,14 @@ int main(int argc, char* argv[]) {
       string algo_label = "SA_" + initMethodName(combo.init_method)
                         + "_" + neighbourhoodName(combo.neighbourhood);
 
+      int current_lb = 0;
       auto run_sa = [&]() {
           auto res = simulatedAnnealing(matrix, combo.initial_temp,
                                         combo.final_temp, combo.cooling_rate,
                                         combo.iter_per_temp, combo.neighbourhood,
                                         combo.init_method, cfg.time_limit_min,
                                         combo.cooling_schedule);
+          current_lb = res.lb;
           return res.best_cost;
       };
 
@@ -164,7 +185,8 @@ int main(int argc, char* argv[]) {
                          << combo.cooling_schedule << ","
                          << (i + 1) << ","
                          << results[i].time_ms << ","
-                         << results[i].cost << "\n";
+                         << results[i].cost << ","
+                         << current_lb << "\n";
       }
       csvOut.flush();
 
@@ -176,6 +198,7 @@ int main(int argc, char* argv[]) {
           } else {
              cout << "   [SA] Avg time: " << sum_res.time_ms
                   << " ms | Best cost: " << sum_res.cost
+                  << " | LB: " << current_lb
                   << " | Init: " << initMethodName(combo.init_method)
                   << " | Neighbour: " << neighbourhoodName(combo.neighbourhood)
                   << " | CS: " << combo.cooling_schedule
