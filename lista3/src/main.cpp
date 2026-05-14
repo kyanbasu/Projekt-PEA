@@ -178,9 +178,11 @@ int main(int argc, char* argv[]) {
                   << " ms | Best cost: " << sum_res.cost
                   << " | Init: " << initMethodName(combo.init_method)
                   << " | Neighbour: " << neighbourhoodName(combo.neighbourhood)
-                  << " | CR: " << combo.cooling_rate
+                  << " | CS: " << combo.cooling_schedule
+                  << " | IPT: " << combo.iter_per_temp
+                  << " | TF: " << combo.final_temp
                   << " | T0: " << combo.initial_temp
-                  << " | IPT: " << combo.iter_per_temp << "\n";
+                  << " | CR: " << combo.cooling_rate << "\n";
           }
       }
     }
