@@ -45,6 +45,7 @@ Config loadConfig(const std::string &filename) {
   cfg.sa.iter_per_temps = {500};
   cfg.sa.neighbourhoods = {1};
   cfg.sa.init_methods = {2};
+  cfg.sa.cooling_schedules = {0};
   cfg.time_limit_min = 5;
 
   std::ifstream file(filename);
@@ -83,6 +84,8 @@ Config loadConfig(const std::string &filename) {
         cfg.sa.neighbourhoods = parseIntList(val);
       else if (key == "init_method")
         cfg.sa.init_methods = parseIntList(val);
+      else if (key == "cooling_schedule")
+        cfg.sa.cooling_schedules = parseIntList(val);
       else if (key == "time_limit_min")
         cfg.time_limit_min = std::stoi(val);
     }

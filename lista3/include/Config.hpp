@@ -15,6 +15,7 @@ struct SAConfig {
     std::vector<int> iter_per_temps;
     std::vector<int> neighbourhoods; // 1=swap, 2=invert, 3=insert
     std::vector<int> init_methods;   // 0=random, 1=NN, 2=RNN
+    std::vector<int> cooling_schedules; // 0=geometric, 1=linear, 2=logarithmic
 };
 
 struct Config

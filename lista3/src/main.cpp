@@ -88,8 +88,10 @@ string initMethodName(int m) {
     return "RAND";
 }
 
-int main() {
-  Config cfg = loadConfig("config.ini");
+int main(int argc, char* argv[]) {
+  std::string config_path = "config.ini";
+  if (argc > 1) config_path = argv[1];
+  Config cfg = loadConfig(config_path);
 
   // Build all parameter combinations
   struct ParamCombo {
@@ -99,6 +101,7 @@ int main() {
     int iter_per_temp;
     int neighbourhood;
     int init_method;
+    int cooling_schedule;
   };
   vector<ParamCombo> combos;
   for (double cr : cfg.sa.cooling_rates)
@@ -107,7 +110,8 @@ int main() {
         for (int ipt : cfg.sa.iter_per_temps)
           for (int neigh : cfg.sa.neighbourhoods)
             for (int init : cfg.sa.init_methods)
-              combos.push_back({cr, it, ft, ipt, neigh, init});
+              for (int cs : cfg.sa.cooling_schedules)
+                combos.push_back({cr, it, ft, ipt, neigh, init, cs});
 
   if (cfg.show_progress) {
     cout << "Znaleziono " << cfg.instances.size() << " plikow.\n";
@@ -117,7 +121,7 @@ int main() {
 
   ofstream csvOut(cfg.output_file);
   csvOut << "Instance,Size,Algorithm,InitMethod,Neighbourhood,"
-         << "CoolingRate,InitTemp,FinalTemp,IterPerTemp,"
+         << "CoolingRate,InitTemp,FinalTemp,IterPerTemp,CoolingSchedule,"
          << "Repeats,Time_ms,Cost\n";
 
   for (const auto &inst_name : cfg.instances) {
@@ -138,7 +142,8 @@ int main() {
           auto res = simulatedAnnealing(matrix, combo.initial_temp,
                                         combo.final_temp, combo.cooling_rate,
                                         combo.iter_per_temp, combo.neighbourhood,
-                                        combo.init_method, cfg.time_limit_min);
+                                        combo.init_method, cfg.time_limit_min,
+                                        combo.cooling_schedule);
           return res.best_cost;
       };
 
@@ -147,18 +152,19 @@ int main() {
       auto sum_res = summarise(results);
 
       for (int i = 0; i < (int)results.size(); ++i) {
-          csvOut << inst_name << ","
-                 << size << ","
-                 << "SA" << ","
-                 << initMethodName(combo.init_method) << ","
-                 << neighbourhoodName(combo.neighbourhood) << ","
-                 << combo.cooling_rate << ","
-                 << combo.initial_temp << ","
-                 << combo.final_temp << ","
-                 << combo.iter_per_temp << ","
-                 << (i + 1) << ","
-                 << results[i].time_ms << ","
-                 << results[i].cost << "\n";
+                  csvOut << inst_name << ","
+                         << size << ","
+                         << "SA" << ","
+                         << initMethodName(combo.init_method) << ","
+                         << neighbourhoodName(combo.neighbourhood) << ","
+                         << combo.cooling_rate << ","
+                         << combo.initial_temp << ","
+                         << combo.final_temp << ","
+                         << combo.iter_per_temp << ","
+                         << combo.cooling_schedule << ","
+                         << (i + 1) << ","
+                         << results[i].time_ms << ","
+                         << results[i].cost << "\n";
       }
       csvOut.flush();
 

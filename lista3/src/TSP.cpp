@@ -247,12 +247,23 @@ vector<int> insertNeighbour(const vector<int>& path) {
 }
 
 // --- Symulowane wyzarzanie (SA) ---
+// Schematy chlodzenia: 0=geometryczny, 1=liniowy, 2=logarytmiczny
+static double coolGeometric(double temp, double rate, int /*iter*/, double /*init_temp*/) {
+    return temp * rate;
+}
+static double coolLinear(double temp, double rate, int /*iter*/, double init_temp) {
+    return temp - (init_temp * (1.0 - rate));
+}
+static double coolLogarithmic(double temp, double rate, int iter, double init_temp) {
+    if (iter <= 0) return init_temp;
+    return init_temp / (1.0 + rate * log(1.0 + iter));
+}
 
 SAResult simulatedAnnealing(const std::vector<std::vector<int>>& matrix,
                             double initial_temp, double final_temp,
                             double cooling_rate, int iter_per_temp,
                             int neighbourhood, int init_method,
-                            int time_limit_min) {
+                            int time_limit_min, int cooling_schedule) {
     SAResult result;
     int n = matrix.size();
 
@@ -281,19 +292,25 @@ SAResult simulatedAnnealing(const std::vector<std::vector<int>>& matrix,
     double timeout_ms = time_limit_min * 60.0 * 1000.0;
     auto start_time = chrono::high_resolution_clock::now();
     int64_t iter_count = 0;
+    int64_t inner_iter = 0;
+    bool timeout_hit = false;
+    int64_t max_epochs = 500000; // zabezpieczenie przed nieskonczona petla (logarytmiczny)
 
     // Zapisujemy historie kosztu dla analizy
     result.cost_history.push_back(current_cost);
 
-    while (temperature > final_temp) {
-        // Sprawdzanie timeout
-        if ((++iter_count & 1023) == 0) {
-            auto now = chrono::high_resolution_clock::now();
-            chrono::duration<double, milli> elapsed = now - start_time;
-            if (elapsed.count() > timeout_ms) throw std::runtime_error("Timeout");
-        }
-
+    while (temperature > final_temp && iter_count < max_epochs) {
         for (int i = 0; i < iter_per_temp; ++i) {
+            ++inner_iter;
+            if ((inner_iter & 127) == 0) {
+                auto now = chrono::high_resolution_clock::now();
+                chrono::duration<double, milli> elapsed = now - start_time;
+                if (elapsed.count() > timeout_ms) {
+                    timeout_hit = true;
+                    break;
+                }
+            }
+
             // Generowanie sasiada
             vector<int> new_path;
             if (neighbourhood == 1) {
@@ -329,13 +346,28 @@ SAResult simulatedAnnealing(const std::vector<std::vector<int>>& matrix,
             }
         }
 
+        if (timeout_hit) break;
+
         // Schladzanie
-        temperature *= cooling_rate;
+        ++iter_count;
+        if (cooling_schedule == 0) {
+            temperature = coolGeometric(temperature, cooling_rate, iter_count, initial_temp);
+        } else if (cooling_schedule == 1) {
+            temperature = coolLinear(temperature, cooling_rate, iter_count, initial_temp);
+        } else if (cooling_schedule == 2) {
+            temperature = coolLogarithmic(temperature, cooling_rate, 0, initial_temp);
+        }
+        
+        if (temperature < final_temp) temperature = final_temp;
 
         // Co pewien czas zapisz historie
-        if ((iter_count & 63) == 0) {
+        if ((iter_count & 3) == 0) {
             result.cost_history.push_back(best_cost);
         }
+    }
+
+    if (timeout_hit) {
+        throw std::runtime_error("Timeout");
     }
 
     result.best_path = best_path;

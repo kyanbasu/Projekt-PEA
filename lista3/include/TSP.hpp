@@ -20,6 +20,7 @@ std::vector<int> invertNeighbour(const std::vector<int>& path);
 std::vector<int> insertNeighbour(const std::vector<int>& path);
 
 // Symulowane wyzarzanie (Simulated Annealing)
+// Schematy chlodzenia: 0=geometryczny, 1=liniowy, 2=logarytmiczny
 struct SAResult {
     std::vector<int> best_path;
     int best_cost;
@@ -31,4 +32,4 @@ SAResult simulatedAnnealing(const std::vector<std::vector<int>>& matrix,
                             double initial_temp, double final_temp,
                             double cooling_rate, int iter_per_temp,
                             int neighbourhood, int init_method,
-                            int time_limit_min);
+                            int time_limit_min, int cooling_schedule = 0);
