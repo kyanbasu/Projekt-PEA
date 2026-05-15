@@ -228,10 +228,6 @@ vector<int> repetitiveNearestNeighbourPath(const vector<vector<int>> &matrix) {
     }
   }
 
-  if (best_path.empty()) {
-      // fallback: generate random
-      best_path = generateRandomPath(n);
-  }
   return best_path;
 }
 
@@ -351,9 +347,9 @@ SAResult simulatedAnnealing(const std::vector<std::vector<int>>& matrix,
         current_path = generateRandomPath(n);
     }
 
-    // Zabezpieczenie: jesli sciezka ma inny rozmiar, wygeneruj losowa
+    // Zabezpieczenie jesli sciezka ma inny rozmiar
     if ((int)current_path.size() != n) {
-        current_path = generateRandomPath(n);
+        throw std::runtime_error("Sciezka ma rozmiar niezgodny z liczba miast");
     }
 
     int current_cost = calculateCost(current_path, matrix);
