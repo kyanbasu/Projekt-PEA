@@ -324,7 +324,7 @@ double calculateInitialTemperature(const vector<vector<int>> &matrix, const vect
         }
     }
     
-    if (count_positive == 0) return 1000.0; // fallback
+    if (count_positive == 0) throw std::runtime_error("Count positive nie może być zerem");
     double avg_delta = sum_positive_delta / count_positive;
     return -avg_delta / log(target_acceptance);
 }
