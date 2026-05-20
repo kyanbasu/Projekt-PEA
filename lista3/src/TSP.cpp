@@ -280,15 +280,18 @@ vector<int> insertNeighbour(const vector<int>& path) {
 
 // --- Symulowane wyzarzanie (SA) ---
 // Schematy chlodzenia: 0=geometryczny, 1=liniowy, 2=logarytmiczny
-static double coolGeometric(double temp, double rate, int /*iter*/, double /*init_temp*/) {
+static double coolGeometric(double temp, double rate, int /*iter*/, double /*init_temp*/, double /*final_temp*/) {
     return temp * rate;
 }
-static double coolLinear(double temp, double rate, int /*iter*/, double init_temp) {
-    return temp - (init_temp * (1.0 - rate));
+static double coolLinear(double temp, double rate, int /*iter*/, double init_temp, double final_temp) {
+    double epochs = log(final_temp / init_temp) / log(rate);
+    double step = (init_temp - final_temp) / epochs;
+    return temp - step;
 }
-static double coolLogarithmic(double temp, double rate, int iter, double init_temp) {
-    if (iter <= 0) return init_temp;
-    return init_temp / (1.0 + rate * log(1.0 + iter));
+static double coolLogarithmic(double temp, double rate, int iter, double init_temp, double final_temp) {
+    double epochs = log(final_temp / init_temp) / log(rate);
+    double beta = ((init_temp / final_temp) - 1.0) / epochs;
+    return init_temp / (1.0 + beta * iter);
 }
 
 double calculateInitialTemperature(const vector<vector<int>> &matrix, const vector<int>& initial_path, int neighbourhood, double target_acceptance = 0.99) {
@@ -431,11 +434,11 @@ SAResult simulatedAnnealing(const std::vector<std::vector<int>>& matrix,
         // Schladzanie
         ++iter_count;
         if (cooling_schedule == 0) {
-            temperature = coolGeometric(temperature, cooling_rate, iter_count, initial_temp);
+            temperature = coolGeometric(temperature, cooling_rate, iter_count, initial_temp, final_temp);
         } else if (cooling_schedule == 1) {
-            temperature = coolLinear(temperature, cooling_rate, iter_count, initial_temp);
+            temperature = coolLinear(temperature, cooling_rate, iter_count, initial_temp, final_temp);
         } else if (cooling_schedule == 2) {
-            temperature = coolLogarithmic(temperature, cooling_rate, iter_count, initial_temp);
+            temperature = coolLogarithmic(temperature, cooling_rate, iter_count, initial_temp, final_temp);
         }
         
         if (temperature < final_temp) temperature = final_temp;
