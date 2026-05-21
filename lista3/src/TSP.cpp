@@ -39,7 +39,7 @@ int calculateMST(const vector<vector<int>> &matrix) {
                 v = j;
             }
         }
-        if (v == -1 || min_e[v] == numeric_limits<int>::max()) break; // graph not connected
+        if (v == -1 || min_e[v] == numeric_limits<int>::max()) break;
         
         in_mst[v] = true;
         total_weight += min_e[v];
@@ -179,7 +179,7 @@ vector<int> nearestNeighbourPath(const vector<vector<int>> &matrix) {
         next_node = i;
       }
     }
-    if (next_node == -1) break; // cannot continue
+    if (next_node == -1) break;
 
     visited[next_node] = true;
     path.push_back(next_node);
@@ -320,7 +320,6 @@ double calculateInitialTemperature(const vector<vector<int>> &matrix, const vect
             }
         }
         
-        // Randomly move to next state to sample space
         if (next_cost != numeric_limits<int>::max()) {
             current = next_path;
             cost = next_cost;
@@ -350,7 +349,7 @@ SAResult simulatedAnnealing(const std::vector<std::vector<int>>& matrix,
         current_path = generateRandomPath(n);
     }
 
-    // Zabezpieczenie jesli sciezka ma inny rozmiar
+    // Wyjatek jesli sciezka ma inny rozmiar niz powinna
     if ((int)current_path.size() != n) {
         throw std::runtime_error("Sciezka ma rozmiar niezgodny z liczba miast");
     }
