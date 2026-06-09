@@ -289,8 +289,27 @@ ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
     double tau_max = 1.0 / (evaporation_rate * global_best_cost);
     double tau_min = tau_max / (2.0 * n);
     std::vector<std::vector<double>> tau(n, std::vector<double>(n, tau_max));
+    
+    std::vector<std::vector<double>> choice_info(n, std::vector<double>(n, 0.0));
 
     double timeout_ms = time_limit_min * 60.0 * 1000.0;
+    // Precompute Candidate Lists (nn_list)
+    int nn_size = std::min(n - 1, 30); // lista najblizszych sasiadow (max 30)
+    std::vector<std::vector<int>> nn_list(n, std::vector<int>(nn_size));
+    for (int i = 0; i < n; ++i) {
+        std::vector<std::pair<int, int>> dists;
+        dists.reserve(n);
+        for (int j = 0; j < n; ++j) {
+            if (i != j && matrix[i][j] != -1) {
+                dists.push_back({matrix[i][j], j});
+            }
+        }
+        std::sort(dists.begin(), dists.end());
+        for (int k = 0; k < nn_size && k < (int)dists.size(); ++k) {
+            nn_list[i][k] = dists[k].second;
+        }
+    }
+
     auto start_time = std::chrono::high_resolution_clock::now();
     bool timeout_hit = false;
 
@@ -305,11 +324,23 @@ ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
             break;
         }
 
+        // Precomputing choice_info for the entire iteration
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < n; ++j) {
+                if (i != j && matrix[i][j] != -1) {
+                    choice_info[i][j] = std::pow(tau[i][j], alpha) * std::pow(eta[i][j], beta);
+                } else {
+                    choice_info[i][j] = 0.0;
+                }
+            }
+        }
+
         std::vector<std::vector<int>> ant_paths(ants_count, std::vector<int>(n));
         std::vector<int> ant_costs(ants_count, 0);
 
         for (int k = 0; k < ants_count; ++k) {
             std::vector<bool> visited(n, false);
+            
             int start_node = dist_node(rng);
             ant_paths[k][0] = start_node;
             visited[start_node] = true;
@@ -318,39 +349,70 @@ ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
             bool path_valid = true;
 
             for (int step = 1; step < n; ++step) {
-                // Wybor nastepnego miasta (Ruletka)
                 int next_node = -1;
                 double sum_prob = 0.0;
-                std::vector<double> probs(n, 0.0);
-                for (int j = 0; j < n; ++j) {
-                    if (!visited[j] && matrix[current_node][j] != -1) {
-                        probs[j] = std::pow(tau[current_node][j], alpha) * std::pow(eta[current_node][j], beta);
-                        sum_prob += probs[j];
+                
+                // Szybki wybor z listy kandydatow (Candidate List)
+                std::vector<int> available_nn;
+                available_nn.reserve(nn_size);
+                for (int nn_node : nn_list[current_node]) {
+                    if (!visited[nn_node]) {
+                        available_nn.push_back(nn_node);
                     }
                 }
 
-                if (sum_prob > 0) {
-                    double r = dist_01(rng) * sum_prob;
-                    double cumulative = 0.0;
-                    for (int j = 0; j < n; ++j) {
-                        if (!visited[j] && matrix[current_node][j] != -1) {
-                            cumulative += probs[j];
+                if (!available_nn.empty()) {
+                    std::vector<double> probs(available_nn.size());
+                    for (size_t i = 0; i < available_nn.size(); ++i) {
+                        probs[i] = choice_info[current_node][available_nn[i]];
+                        sum_prob += probs[i];
+                    }
+
+                    if (sum_prob > 0) {
+                        double r = dist_01(rng) * sum_prob;
+                        double cumulative = 0.0;
+                        for (size_t i = 0; i < available_nn.size(); ++i) {
+                            cumulative += probs[i];
                             if (cumulative >= r) {
-                                next_node = j;
+                                next_node = available_nn[i];
                                 break;
                             }
                         }
                     }
-                    if (next_node == -1) {
-                         for (int j = n-1; j >= 0; --j) {
-                              if (!visited[j] && matrix[current_node][j] != -1) {
-                                  next_node = j; break;
-                              }
-                         }
+                }
+
+                // Jesli lista kandydatow zawiodla (wszyscy odwiedzeni), robimy klasyczny O(n) fallback
+                if (next_node == -1) {
+                    sum_prob = 0.0;
+                    std::vector<int> remaining;
+                    remaining.reserve(n);
+                    for (int j = 0; j < n; ++j) {
+                        if (!visited[j] && matrix[current_node][j] != -1) {
+                            remaining.push_back(j);
+                        }
                     }
-                } else {
-                    path_valid = false;
-                    break;
+                    
+                    if (!remaining.empty()) {
+                        std::vector<double> probs(remaining.size());
+                        for (size_t i = 0; i < remaining.size(); ++i) {
+                            probs[i] = choice_info[current_node][remaining[i]];
+                            sum_prob += probs[i];
+                        }
+                        if (sum_prob > 0) {
+                            double r = dist_01(rng) * sum_prob;
+                            double cumulative = 0.0;
+                            for (size_t i = 0; i < remaining.size(); ++i) {
+                                cumulative += probs[i];
+                                if (cumulative >= r) {
+                                    next_node = remaining[i];
+                                    break;
+                                }
+                            }
+                        }
+                        if (next_node == -1) {
+                            next_node = remaining.back();
+                        }
+                    }
                 }
 
                 if (next_node == -1) {
