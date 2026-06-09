@@ -231,220 +231,194 @@ vector<int> repetitiveNearestNeighbourPath(const vector<vector<int>> &matrix) {
   return best_path;
 }
 
-// --- Operacje sasiedztwa ---
+// --- Algorytm Mrówkowy (Max-Min Ant System) ---
 
-vector<int> swapNeighbour(const vector<int>& path) {
-    vector<int> neighbour = path;
-    int n = path.size();
-    if (n < 3) return neighbour;
-
-    uniform_int_distribution<int> dist(1, n - 1);
-    int i = dist(rng);
-    int j = dist(rng);
-    while (i == j) j = dist(rng);
-
-    swap(neighbour[i], neighbour[j]);
-    return neighbour;
-}
-
-vector<int> invertNeighbour(const vector<int>& path) {
-    vector<int> neighbour = path;
-    int n = path.size();
-    if (n < 3) return neighbour;
-
-    uniform_int_distribution<int> dist(1, n - 1);
-    int i = dist(rng);
-    int j = dist(rng);
-    while (i == j) j = dist(rng);
-
-    if (i > j) swap(i, j);
-    reverse(neighbour.begin() + i, neighbour.begin() + j + 1);
-    return neighbour;
-}
-
-vector<int> insertNeighbour(const vector<int>& path) {
-    vector<int> neighbour = path;
-    int n = path.size();
-    if (n < 3) return neighbour;
-
-    uniform_int_distribution<int> dist(1, n - 1);
-    int i = dist(rng);
-    int j = dist(rng);
-    while (i == j) j = dist(rng);
-
-    int city = neighbour[i];
-    neighbour.erase(neighbour.begin() + i);
-    neighbour.insert(neighbour.begin() + j, city);
-    return neighbour;
-}
-
-// --- Symulowane wyzarzanie (SA) ---
-// Schematy chlodzenia: 0=geometryczny, 1=liniowy, 2=logarytmiczny
-static double coolGeometric(double temp, double rate, int /*iter*/, double /*init_temp*/, double /*final_temp*/) {
-    return temp * rate;
-}
-static double coolLinear(double temp, double rate, int /*iter*/, double init_temp, double final_temp) {
-    double epochs = log(final_temp / init_temp) / log(rate);
-    double step = (init_temp - final_temp) / epochs;
-    return temp - step;
-}
-static double coolLogarithmic(double temp, double rate, int iter, double init_temp, double final_temp) {
-    double epochs = log(final_temp / init_temp) / log(rate);
-    double beta = ((init_temp / final_temp) - 1.0) / epochs;
-    return init_temp / (1.0 + beta * iter);
-}
-
-double calculateInitialTemperature(const vector<vector<int>> &matrix, const vector<int>& initial_path, int neighbourhood, double target_acceptance = 0.99) {
+ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
+                                double alpha, double beta, double evaporation_rate,
+                                int ants_count, int iterations,
+                                int init_method, int time_limit_min) {
+    ACOResult result;
     int n = matrix.size();
-    int samples = 1000;
-    if (samples > n * n) samples = n * n;
-    
-    double sum_positive_delta = 0.0;
-    int count_positive = 0;
-    
-    vector<int> current = initial_path;
-    int cost = calculateCost(current, matrix);
-    
-    for (int i = 0; i < samples; ++i) {
-        vector<int> next_path;
-        if (neighbourhood == 1) next_path = swapNeighbour(current);
-        else if (neighbourhood == 2) next_path = invertNeighbour(current);
-        else next_path = insertNeighbour(current);
-        
-        int next_cost = calculateCost(next_path, matrix);
-        if (next_cost != numeric_limits<int>::max()) {
-            int delta = next_cost - cost;
-            if (delta > 0) {
-                sum_positive_delta += delta;
-                count_positive++;
-            }
-        }
-        
-        if (next_cost != numeric_limits<int>::max()) {
-            current = next_path;
-            cost = next_cost;
-        }
+    if (n <= 1) {
+        throw std::invalid_argument("Macierz musi miec co najmniej 2 miasta.");
     }
     
-    if (count_positive == 0) throw std::runtime_error("Count positive nie może być zerem");
-    double avg_delta = sum_positive_delta / count_positive;
-    return -avg_delta / log(target_acceptance);
-}
+    if (ants_count == -1) ants_count = n; // Dynamic ants_count
 
-SAResult simulatedAnnealing(const std::vector<std::vector<int>>& matrix,
-                            double initial_temp, double final_temp,
-                            double cooling_rate, int iter_per_temp,
-                            int neighbourhood, int init_method,
-                            int time_limit_min, int cooling_schedule) {
-    SAResult result;
-    int n = matrix.size();
-
-    // Generowanie rozwiazania poczatkowego
-    vector<int> current_path;
-    if (init_method == 1) {
-        current_path = nearestNeighbourPath(matrix);
-    } else if (init_method == 2) {
-        current_path = repetitiveNearestNeighbourPath(matrix);
-    } else {
-        current_path = generateRandomPath(n);
+    if (ants_count <= 0 || iterations <= 0 || alpha < 0 || beta < 0 || evaporation_rate <= 0 || evaporation_rate > 1) {
+        throw std::invalid_argument("Nieprawidlowe parametry ACO.");
     }
 
-    // Wyjatek jesli sciezka ma inny rozmiar niz powinna
-    if ((int)current_path.size() != n) {
-        throw std::runtime_error("Sciezka ma rozmiar niezgodny z liczba miast");
-    }
-
-    int current_cost = calculateCost(current_path, matrix);
-
-    vector<int> best_path = current_path;
-    int best_cost = current_cost;
-    
-    // Lower Bound z MST
     result.lb = calculateMST(matrix);
 
-    double temperature = initial_temp;
-    // Jesli temperatura ujemna, wyznacz automatycznie
-    if (temperature < 0) {
-        temperature = calculateInitialTemperature(matrix, current_path, neighbourhood, 0.99);
-        // Nadpisujemy zmienna local_init_temp na wypadek gdyby schematy chlodzenia z niej korzystaly
-        initial_temp = temperature;
+    // Heurystyka: eta = 1 / d
+    std::vector<std::vector<double>> eta(n, std::vector<double>(n, 0.0));
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            if (i != j && matrix[i][j] != -1 && matrix[i][j] != 0) {
+                eta[i][j] = 1.0 / matrix[i][j];
+            } else if (i != j && matrix[i][j] == 0) {
+                eta[i][j] = 1e9; // ekstremalnie duza heurystyka dla zerowej odleglosci
+            }
+        }
     }
 
+    // Inicjalizacja feromonu
+    std::vector<int> initial_path;
+    if (init_method == 1) {
+        initial_path = nearestNeighbourPath(matrix);
+    } else if (init_method == 2) {
+        initial_path = repetitiveNearestNeighbourPath(matrix);
+    } else {
+        initial_path = generateRandomPath(n);
+    }
+    
+    if ((int)initial_path.size() != n) {
+        throw std::runtime_error("Sciezka inicjalizacyjna ma niepoprawny rozmiar.");
+    }
+
+    int initial_cost = calculateCost(initial_path, matrix);
+    if (initial_cost == std::numeric_limits<int>::max()) {
+         throw std::runtime_error("Poczatkowa trasa nie istnieje.");
+    }
+
+    std::vector<int> global_best_path = initial_path;
+    int global_best_cost = initial_cost;
+
+    // Limity MMAS
+    double tau_max = 1.0 / (evaporation_rate * global_best_cost);
+    double tau_min = tau_max / (2.0 * n);
+    std::vector<std::vector<double>> tau(n, std::vector<double>(n, tau_max));
+
     double timeout_ms = time_limit_min * 60.0 * 1000.0;
-    auto start_time = chrono::high_resolution_clock::now();
-    int64_t iter_count = 0;
-    int64_t inner_iter = 0;
+    auto start_time = std::chrono::high_resolution_clock::now();
     bool timeout_hit = false;
-    int64_t max_epochs = 500000; // zabezpieczenie przed nieskonczona petla (logarytmiczny)
 
-    // Zapisujemy historie kosztu dla analizy
-    result.cost_history.push_back(current_cost);
+    std::uniform_real_distribution<double> dist_01(0.0, 1.0);
+    std::uniform_int_distribution<int> dist_node(0, n - 1);
 
-    while (temperature > final_temp && iter_count < max_epochs) {
-        for (int i = 0; i < iter_per_temp; ++i) {
-            ++inner_iter;
-            if ((inner_iter & 127) == 0) {
-                auto now = chrono::high_resolution_clock::now();
-                chrono::duration<double, milli> elapsed = now - start_time;
-                if (elapsed.count() > timeout_ms) {
-                    timeout_hit = true;
+    for (int iter = 0; iter < iterations; ++iter) {
+        auto now = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed = now - start_time;
+        if (elapsed.count() > timeout_ms) {
+            timeout_hit = true;
+            break;
+        }
+
+        std::vector<std::vector<int>> ant_paths(ants_count, std::vector<int>(n));
+        std::vector<int> ant_costs(ants_count, 0);
+
+        for (int k = 0; k < ants_count; ++k) {
+            std::vector<bool> visited(n, false);
+            int start_node = dist_node(rng);
+            ant_paths[k][0] = start_node;
+            visited[start_node] = true;
+
+            int current_node = start_node;
+            bool path_valid = true;
+
+            for (int step = 1; step < n; ++step) {
+                // Wybor nastepnego miasta (Ruletka)
+                int next_node = -1;
+                double sum_prob = 0.0;
+                std::vector<double> probs(n, 0.0);
+                for (int j = 0; j < n; ++j) {
+                    if (!visited[j] && matrix[current_node][j] != -1) {
+                        probs[j] = std::pow(tau[current_node][j], alpha) * std::pow(eta[current_node][j], beta);
+                        sum_prob += probs[j];
+                    }
+                }
+
+                if (sum_prob > 0) {
+                    double r = dist_01(rng) * sum_prob;
+                    double cumulative = 0.0;
+                    for (int j = 0; j < n; ++j) {
+                        if (!visited[j] && matrix[current_node][j] != -1) {
+                            cumulative += probs[j];
+                            if (cumulative >= r) {
+                                next_node = j;
+                                break;
+                            }
+                        }
+                    }
+                    if (next_node == -1) {
+                         for (int j = n-1; j >= 0; --j) {
+                              if (!visited[j] && matrix[current_node][j] != -1) {
+                                  next_node = j; break;
+                              }
+                         }
+                    }
+                } else {
+                    path_valid = false;
                     break;
                 }
+
+                if (next_node == -1) {
+                    path_valid = false;
+                    break;
+                }
+
+                ant_paths[k][step] = next_node;
+                visited[next_node] = true;
+                ant_costs[k] += matrix[current_node][next_node];
+                
+                current_node = next_node;
             }
 
-            // Generowanie sasiada
-            vector<int> new_path;
-            if (neighbourhood == 1) {
-                new_path = swapNeighbour(current_path);
-            } else if (neighbourhood == 2) {
-                new_path = invertNeighbour(current_path);
+            if (path_valid) {
+                if (matrix[current_node][start_node] == -1) {
+                    path_valid = false;
+                } else {
+                    ant_costs[k] += matrix[current_node][start_node];
+                }
             } else {
-                new_path = insertNeighbour(current_path);
+                ant_costs[k] = std::numeric_limits<int>::max();
             }
 
-            int new_cost = calculateCost(new_path, matrix);
-            if (new_cost == numeric_limits<int>::max()) continue; // niepoprawna sciezka
-
-            int delta = new_cost - current_cost;
-
-            if (delta < 0) {
-                // Akceptuj lepsze rozwiazanie
-                current_path = new_path;
-                current_cost = new_cost;
-
-                if (current_cost < best_cost) {
-                    best_path = current_path;
-                    best_cost = current_cost;
-                }
-            } else {
-                // Akceptuj gorsze z pewnym prawdopodobienstwem
-                double acceptance = exp(-delta / temperature);
-                uniform_real_distribution<double> dist(0.0, 1.0);
-                if (dist(rng) < acceptance) {
-                    current_path = new_path;
-                    current_cost = new_cost;
-                }
+            if (path_valid && ant_costs[k] < global_best_cost) {
+                global_best_cost = ant_costs[k];
+                global_best_path = ant_paths[k];
+                // MMAS aktualizuje limity po znalezieniu nowego the best
+                tau_max = 1.0 / (evaporation_rate * global_best_cost);
+                tau_min = tau_max / (2.0 * n);
             }
         }
 
-        if (timeout_hit) break;
-        if (best_cost <= result.lb) break; // Optymalne rozwiazanie, wczesne wyjscie
-
-        // Schladzanie
-        ++iter_count;
-        if (cooling_schedule == 0) {
-            temperature = coolGeometric(temperature, cooling_rate, iter_count, initial_temp, final_temp);
-        } else if (cooling_schedule == 1) {
-            temperature = coolLinear(temperature, cooling_rate, iter_count, initial_temp, final_temp);
-        } else if (cooling_schedule == 2) {
-            temperature = coolLogarithmic(temperature, cooling_rate, iter_count, initial_temp, final_temp);
+        // Globalna aktualizacja feromonu w MMAS (tylko Global Best)
+        // Parowanie ze wszystkich krawedzi
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < n; ++j) {
+                tau[i][j] = (1.0 - evaporation_rate) * tau[i][j];
+            }
         }
         
-        if (temperature < final_temp) temperature = final_temp;
+        // Zostawianie feromonu na sciezce best
+        if (global_best_cost != std::numeric_limits<int>::max()) {
+            double delta_tau = 1.0 / global_best_cost;
+            for (int i = 0; i < n - 1; ++i) {
+                int u = global_best_path[i];
+                int v = global_best_path[i + 1];
+                tau[u][v] += delta_tau;
+            }
+            int u = global_best_path.back();
+            int v = global_best_path[0];
+            tau[u][v] += delta_tau;
+        }
 
-        // Co pewien czas zapisz historie
-        if ((iter_count & 3) == 0) {
-            result.cost_history.push_back(best_cost);
+        // Przycinanie feromonu do limitów MMAS
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < n; ++j) {
+                if (tau[i][j] > tau_max) tau[i][j] = tau_max;
+                if (tau[i][j] < tau_min) tau[i][j] = tau_min;
+            }
+        }
+
+        if ((iter & 7) == 0) {
+             result.cost_history.push_back(global_best_cost);
+        }
+        
+        if (global_best_cost <= result.lb) {
+            break; // Osiagnieto optimalny koszt, wczesne wyjscie
         }
     }
 
@@ -452,9 +426,8 @@ SAResult simulatedAnnealing(const std::vector<std::vector<int>>& matrix,
         throw std::runtime_error("Timeout");
     }
 
-    result.best_path = best_path;
-    result.best_cost = best_cost;
-    result.mem_kb = 0; // Pomijalne, poniewaz SA nie uzywa zadnych istotnie duzych struktur
-
+    result.best_path = global_best_path;
+    result.best_cost = global_best_cost;
+    result.mem_kb = 0; 
     return result;
 }

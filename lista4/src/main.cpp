@@ -74,12 +74,6 @@ RunResult summarise(const vector<RunResult> &runs) {
   return {sum_t / runs.size(), best};
 }
 
-string neighbourhoodName(int n) {
-    if (n == 1) return "SWAP";
-    if (n == 2) return "INVERT";
-    return "INSERT";
-}
-
 string initMethodName(int m) {
     if (m == 1) return "NN";
     if (m == 2) return "RNN";
@@ -93,42 +87,39 @@ int main(int argc, char* argv[]) {
 
   // Build combinations for One At a Time (OAT) testing
   struct ParamCombo {
-    double cooling_rate;
-    double initial_temp;
-    double final_temp;
-    int iter_per_temp;
-    int neighbourhood;
+    double alpha;
+    double beta;
+    double evaporation_rate;
+    int ants_count;
+    int iterations;
     int init_method;
-    int cooling_schedule;
   };
   vector<ParamCombo> combos;
   
-  auto addCombo = [&](double cr, double it, double ft, int ipt, int neigh, int init, int cs) {
+  auto addCombo = [&](double a, double b, double er, int ac, int it, int im) {
       for (const auto& c : combos) {
-          if (c.cooling_rate == cr && c.initial_temp == it && c.final_temp == ft && 
-              c.iter_per_temp == ipt && c.neighbourhood == neigh && c.init_method == init && c.cooling_schedule == cs) return;
+          if (c.alpha == a && c.beta == b && c.evaporation_rate == er && 
+              c.ants_count == ac && c.iterations == it && c.init_method == im) return;
       }
-      combos.push_back({cr, it, ft, ipt, neigh, init, cs});
+      combos.push_back({a, b, er, ac, it, im});
   };
 
   // Baseline config (first elements of each list)
-  double b_cr = cfg.sa.cooling_rates.empty() ? 0.99 : cfg.sa.cooling_rates[0];
-  double b_it = cfg.sa.initial_temps.empty() ? -1.0 : cfg.sa.initial_temps[0];
-  double b_ft = cfg.sa.final_temps.empty() ? 0.1 : cfg.sa.final_temps[0];
-  int b_ipt = cfg.sa.iter_per_temps.empty() ? 100 : cfg.sa.iter_per_temps[0];
-  int b_neigh = cfg.sa.neighbourhoods.empty() ? 2 : cfg.sa.neighbourhoods[0];
-  int b_init = cfg.sa.init_methods.empty() ? 2 : cfg.sa.init_methods[0];
-  int b_cs = cfg.sa.cooling_schedules.empty() ? 0 : cfg.sa.cooling_schedules[0];
+  double b_alpha = cfg.aco.alphas.empty() ? 1.0 : cfg.aco.alphas[0];
+  double b_beta = cfg.aco.betas.empty() ? 2.0 : cfg.aco.betas[0];
+  double b_er = cfg.aco.evaporation_rates.empty() ? 0.1 : cfg.aco.evaporation_rates[0];
+  int b_ac = cfg.aco.ants_counts.empty() ? -1 : cfg.aco.ants_counts[0];
+  int b_it = cfg.aco.iterations.empty() ? 100 : cfg.aco.iterations[0];
+  int b_im = cfg.aco.init_methods.empty() ? 1 : cfg.aco.init_methods[0];
 
-  addCombo(b_cr, b_it, b_ft, b_ipt, b_neigh, b_init, b_cs);
+  addCombo(b_alpha, b_beta, b_er, b_ac, b_it, b_im);
   
-  for (double cr : cfg.sa.cooling_rates) addCombo(cr, b_it, b_ft, b_ipt, b_neigh, b_init, b_cs);
-  for (double it : cfg.sa.initial_temps) addCombo(b_cr, it, b_ft, b_ipt, b_neigh, b_init, b_cs);
-  for (double ft : cfg.sa.final_temps) addCombo(b_cr, b_it, ft, b_ipt, b_neigh, b_init, b_cs);
-  for (int ipt : cfg.sa.iter_per_temps) addCombo(b_cr, b_it, b_ft, ipt, b_neigh, b_init, b_cs);
-  for (int neigh : cfg.sa.neighbourhoods) addCombo(b_cr, b_it, b_ft, b_ipt, neigh, b_init, b_cs);
-  for (int init : cfg.sa.init_methods) addCombo(b_cr, b_it, b_ft, b_ipt, b_neigh, init, b_cs);
-  for (int cs : cfg.sa.cooling_schedules) addCombo(b_cr, b_it, b_ft, b_ipt, b_neigh, b_init, cs);
+  for (double a : cfg.aco.alphas) addCombo(a, b_beta, b_er, b_ac, b_it, b_im);
+  for (double b : cfg.aco.betas) addCombo(b_alpha, b, b_er, b_ac, b_it, b_im);
+  for (double er : cfg.aco.evaporation_rates) addCombo(b_alpha, b_beta, er, b_ac, b_it, b_im);
+  for (int ac : cfg.aco.ants_counts) addCombo(b_alpha, b_beta, b_er, ac, b_it, b_im);
+  for (int it : cfg.aco.iterations) addCombo(b_alpha, b_beta, b_er, b_ac, it, b_im);
+  for (int im : cfg.aco.init_methods) addCombo(b_alpha, b_beta, b_er, b_ac, b_it, im);
 
   if (cfg.show_progress) {
     cout << "Znaleziono " << cfg.instances.size() << " plikow.\n";
@@ -137,8 +128,8 @@ int main(int argc, char* argv[]) {
   }
 
   ofstream csvOut(cfg.output_file);
-  csvOut << "Instance,Size,Algorithm,InitMethod,Neighbourhood,"
-         << "CoolingRate,InitTemp,FinalTemp,IterPerTemp,CoolingSchedule,"
+  csvOut << "Instance,Size,Algorithm,InitMethod,"
+         << "Alpha,Beta,EvaporationRate,AntsCount,Iterations,"
          << "Repeats,Time_ms,Cost,LB\n";
 
   for (const auto &inst_name : cfg.instances) {
@@ -152,35 +143,31 @@ int main(int argc, char* argv[]) {
     }
 
     for (const auto &combo : combos) {
-      string algo_label = "SA_" + initMethodName(combo.init_method)
-                        + "_" + neighbourhoodName(combo.neighbourhood);
+      string algo_label = "MMAS_" + initMethodName(combo.init_method);
 
       int current_lb = 0;
-      auto run_sa = [&]() {
-          auto res = simulatedAnnealing(matrix, combo.initial_temp,
-                                        combo.final_temp, combo.cooling_rate,
-                                        combo.iter_per_temp, combo.neighbourhood,
-                                        combo.init_method, cfg.time_limit_min,
-                                        combo.cooling_schedule);
+      auto run_aco = [&]() {
+          auto res = antColonyOptimization(matrix, combo.alpha, combo.beta, combo.evaporation_rate,
+                                           combo.ants_count, combo.iterations, combo.init_method,
+                                           cfg.time_limit_min);
           current_lb = res.lb;
           return res.best_cost;
       };
 
-      vector<RunResult> results = measureTimeAll(run_sa, cfg.repeats,
+      vector<RunResult> results = measureTimeAll(run_aco, cfg.repeats,
                                                   cfg.show_progress, algo_label);
       auto sum_res = summarise(results);
 
       for (int i = 0; i < (int)results.size(); ++i) {
                   csvOut << inst_name << ","
                          << size << ","
-                         << "SA" << ","
+                         << "MMAS" << ","
                          << initMethodName(combo.init_method) << ","
-                         << neighbourhoodName(combo.neighbourhood) << ","
-                         << combo.cooling_rate << ","
-                         << combo.initial_temp << ","
-                         << combo.final_temp << ","
-                         << combo.iter_per_temp << ","
-                         << combo.cooling_schedule << ","
+                         << combo.alpha << ","
+                         << combo.beta << ","
+                         << combo.evaporation_rate << ","
+                         << combo.ants_count << ","
+                         << combo.iterations << ","
                          << (i + 1) << ","
                          << results[i].time_ms << ","
                          << results[i].cost << ","
@@ -190,20 +177,19 @@ int main(int argc, char* argv[]) {
 
       if (cfg.show_progress) {
           if (sum_res.cost == -2) {
-             cout << "   [SA] Przerwano z powodu braku pamieci\n";
+             cout << "   [MMAS] Przerwano z powodu braku pamieci\n";
           } else if (sum_res.cost == -3) {
-             cout << "   [SA] Przerwano z powodu przekroczenia limitu " << cfg.time_limit_min << " min\n";
+             cout << "   [MMAS] Przerwano z powodu przekroczenia limitu " << cfg.time_limit_min << " min\n";
           } else {
-             cout << "   [SA] Avg time: " << sum_res.time_ms
+             cout << "   [MMAS] Avg time: " << sum_res.time_ms
                   << " ms | Best cost: " << sum_res.cost
                   << " | LB: " << current_lb
                   << " | Init: " << initMethodName(combo.init_method)
-                  << " | Neighbour: " << neighbourhoodName(combo.neighbourhood)
-                  << " | CS: " << combo.cooling_schedule
-                  << " | IPT: " << combo.iter_per_temp
-                  << " | TF: " << combo.final_temp
-                  << " | T0: " << combo.initial_temp
-                  << " | CR: " << combo.cooling_rate << "\n";
+                  << " | Alpha: " << combo.alpha
+                  << " | Beta: " << combo.beta
+                  << " | Rho: " << combo.evaporation_rate
+                  << " | Ants: " << combo.ants_count
+                  << " | Iters: " << combo.iterations << "\n";
           }
       }
     }

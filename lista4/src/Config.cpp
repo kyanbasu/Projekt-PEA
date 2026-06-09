@@ -38,13 +38,12 @@ std::vector<int> parseIntList(const std::string& val) {
 
 Config loadConfig(const std::string &filename) {
   Config cfg;
-  cfg.sa.cooling_rates = {0.99};
-  cfg.sa.initial_temps = {10000.0};
-  cfg.sa.final_temps = {0.1};
-  cfg.sa.iter_per_temps = {500};
-  cfg.sa.neighbourhoods = {1};
-  cfg.sa.init_methods = {2};
-  cfg.sa.cooling_schedules = {0};
+  cfg.aco.alphas = {1.0};
+  cfg.aco.betas = {2.0};
+  cfg.aco.evaporation_rates = {0.1};
+  cfg.aco.ants_counts = {-1}; // domyslnie -1 oznacza dynamicznie (rowne N)
+  cfg.aco.iterations = {1000};
+  cfg.aco.init_methods = {1}; // domyslnie NN
   cfg.time_limit_min = 5;
 
   std::ifstream file(filename);
@@ -71,20 +70,18 @@ Config loadConfig(const std::string &filename) {
         cfg.show_progress = std::stoi(val);
       else if (key == "repeats")
         cfg.repeats = std::stoi(val);
-      else if (key == "cooling_rate")
-        cfg.sa.cooling_rates = parseDoubleList(val);
-      else if (key == "initial_temp")
-        cfg.sa.initial_temps = parseDoubleList(val);
-      else if (key == "final_temp")
-        cfg.sa.final_temps = parseDoubleList(val);
-      else if (key == "iter_per_temp")
-        cfg.sa.iter_per_temps = parseIntList(val);
-      else if (key == "neighbourhood")
-        cfg.sa.neighbourhoods = parseIntList(val);
+      else if (key == "alpha")
+        cfg.aco.alphas = parseDoubleList(val);
+      else if (key == "beta")
+        cfg.aco.betas = parseDoubleList(val);
+      else if (key == "evaporation_rate")
+        cfg.aco.evaporation_rates = parseDoubleList(val);
+      else if (key == "ants_count")
+        cfg.aco.ants_counts = parseIntList(val);
+      else if (key == "iterations")
+        cfg.aco.iterations = parseIntList(val);
       else if (key == "init_method")
-        cfg.sa.init_methods = parseIntList(val);
-      else if (key == "cooling_schedule")
-        cfg.sa.cooling_schedules = parseIntList(val);
+        cfg.aco.init_methods = parseIntList(val);
       else if (key == "time_limit_min")
         cfg.time_limit_min = std::stoi(val);
     }

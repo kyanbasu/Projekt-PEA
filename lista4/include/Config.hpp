@@ -8,14 +8,13 @@ struct Node {
     double y;
 };
 
-struct SAConfig {
-    std::vector<double> cooling_rates;
-    std::vector<double> initial_temps;
-    std::vector<double> final_temps;
-    std::vector<int> iter_per_temps;
-    std::vector<int> neighbourhoods; // 1=swap, 2=invert, 3=insert
-    std::vector<int> init_methods;   // 0=random, 1=NN, 2=RNN
-    std::vector<int> cooling_schedules; // 0=geometric, 1=linear, 2=logarithmic
+struct ACOConfig {
+    std::vector<double> alphas;
+    std::vector<double> betas;
+    std::vector<double> evaporation_rates; // rho
+    std::vector<int> ants_counts;
+    std::vector<int> iterations;
+    std::vector<int> init_methods; // 0=random, 1=NN, 2=RNN (do inicjalizacji feromonu)
 };
 
 struct Config
@@ -25,8 +24,8 @@ struct Config
     bool show_progress;
     int repeats;
 
-    // SA parameter sets (comma-separated in config.ini)
-    SAConfig sa;
+    // ACO parameter sets (comma-separated in config.ini)
+    ACOConfig aco;
 
     // Time limit in minutes for a single instance
     int time_limit_min;
