@@ -1,5 +1,6 @@
 #include "../include/Config.hpp"
 #include "../include/TSP.hpp"
+#include "../include/Optimums.hpp"
 #include <chrono>
 #include <fstream>
 #include <iomanip>
@@ -130,16 +131,30 @@ int main(int argc, char* argv[]) {
   ofstream csvOut(cfg.output_file);
   csvOut << "Instance,Size,Algorithm,InitMethod,"
          << "Alpha,Beta,EvaporationRate,AntsCount,Iterations,"
-         << "Repeats,Time_ms,Cost,LB\n";
+         << "Repeats,Time_ms,Cost,LB,Optimum,PRD_Percent\n";
 
   for (const auto &inst_name : cfg.instances) {
     int size = 0;
     string filepath = cfg.data_folder + inst_name;
     vector<vector<int>> matrix = loadMatrix(filepath, size);
 
+    string base_name = inst_name;
+    size_t last_dot = base_name.find_last_of(".");
+    if (last_dot != string::npos) {
+        base_name = base_name.substr(0, last_dot);
+    }
+    
+    int optimum = -1;
+    if (TSPLIB_OPTIMUMS.count(base_name)) {
+        optimum = TSPLIB_OPTIMUMS.at(base_name);
+    }
+
     if (cfg.show_progress) {
       cout << "\n============================================\n";
       cout << "Instancja: " << inst_name << " (Rozmiar: " << size << ")\n";
+      if (optimum != -1) {
+          cout << "Znane optimum: " << optimum << "\n";
+      }
     }
 
     for (const auto &combo : combos) {
@@ -159,6 +174,11 @@ int main(int argc, char* argv[]) {
       auto sum_res = summarise(results);
 
       for (int i = 0; i < (int)results.size(); ++i) {
+                  double prd = -1.0;
+                  if (optimum > 0) {
+                      prd = 100.0 * (results[i].cost - optimum) / optimum;
+                  }
+
                   csvOut << inst_name << ","
                          << size << ","
                          << "MMAS" << ","
@@ -171,7 +191,9 @@ int main(int argc, char* argv[]) {
                          << (i + 1) << ","
                          << results[i].time_ms << ","
                          << results[i].cost << ","
-                         << current_lb << "\n";
+                         << current_lb << ","
+                         << optimum << ","
+                         << prd << "\n";
       }
       csvOut.flush();
 
@@ -181,9 +203,13 @@ int main(int argc, char* argv[]) {
           } else if (sum_res.cost == -3) {
              cout << "   [MMAS] Przerwano z powodu przekroczenia limitu " << cfg.time_limit_min << " min\n";
           } else {
+             double prd_avg = -1.0;
+             if (optimum > 0) prd_avg = 100.0 * (sum_res.cost - optimum) / optimum;
+             
              cout << "   [MMAS] Avg time: " << sum_res.time_ms
-                  << " ms | Best cost: " << sum_res.cost
-                  << " | LB: " << current_lb
+                  << " ms | Best cost: " << sum_res.cost;
+             if (optimum > 0) cout << " (PRD: " << std::fixed << std::setprecision(2) << prd_avg << "%)";
+             cout << " | LB: " << current_lb
                   << " | Init: " << initMethodName(combo.init_method)
                   << " | Alpha: " << combo.alpha
                   << " | Beta: " << combo.beta
