@@ -44,6 +44,7 @@ Config loadConfig(const std::string &filename) {
   cfg.aco.ants_counts = {-1}; // domyslnie -1 oznacza dynamicznie (rowne N)
   cfg.aco.iterations = {1000};
   cfg.aco.init_methods = {1}; // domyslnie NN
+  cfg.aco.aco_variants = {1}; // domyslnie MMAS
   cfg.time_limit_min = 5;
 
   std::ifstream file(filename);
@@ -82,6 +83,8 @@ Config loadConfig(const std::string &filename) {
         cfg.aco.iterations = parseIntList(val);
       else if (key == "init_method")
         cfg.aco.init_methods = parseIntList(val);
+      else if (key == "aco_variant")
+        cfg.aco.aco_variants = parseIntList(val);
       else if (key == "time_limit_min")
         cfg.time_limit_min = std::stoi(val);
     }

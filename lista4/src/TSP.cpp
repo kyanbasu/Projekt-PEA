@@ -231,12 +231,12 @@ vector<int> repetitiveNearestNeighbourPath(const vector<vector<int>> &matrix) {
   return best_path;
 }
 
-// --- Algorytm Mrówkowy (Max-Min Ant System) ---
+// --- Algorytm Mrowkowy (ACO i MMAS) ---
 
 ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
                                 double alpha, double beta, double evaporation_rate,
                                 int ants_count, int iterations,
-                                int init_method, int time_limit_min) {
+                                int init_method, int aco_variant, int time_limit_min) {
     ACOResult result;
     int n = matrix.size();
     if (n <= 1) {
@@ -285,11 +285,20 @@ ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
     std::vector<int> global_best_path = initial_path;
     int global_best_cost = initial_cost;
 
-    // Limity MMAS
-    double tau_max = 1.0 / (evaporation_rate * global_best_cost);
-    double tau_min = tau_max / (2.0 * n);
-    std::vector<std::vector<double>> tau(n, std::vector<double>(n, tau_max));
+    // Inicjalizacja feromonu w zaleznosci od wariantu
+    double tau_max = 1.0;
+    double tau_min = 0.0;
+    double initial_tau = 1.0;
     
+    if (aco_variant == 1) { // MMAS
+        tau_max = 1.0 / (evaporation_rate * global_best_cost);
+        tau_min = tau_max / (2.0 * n);
+        initial_tau = tau_max;
+    } else { // Basic AS
+        initial_tau = (double)ants_count / global_best_cost;
+    }
+    
+    std::vector<std::vector<double>> tau(n, std::vector<double>(n, initial_tau));
     std::vector<std::vector<double>> choice_info(n, std::vector<double>(n, 0.0));
 
     double timeout_ms = time_limit_min * 60.0 * 1000.0;
@@ -440,38 +449,57 @@ ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
             if (path_valid && ant_costs[k] < global_best_cost) {
                 global_best_cost = ant_costs[k];
                 global_best_path = ant_paths[k];
-                // MMAS aktualizuje limity po znalezieniu nowego the best
-                tau_max = 1.0 / (evaporation_rate * global_best_cost);
-                tau_min = tau_max / (2.0 * n);
+                
+                if (aco_variant == 1) { // MMAS
+                    // MMAS aktualizuje limity po znalezieniu nowego the best
+                    tau_max = 1.0 / (evaporation_rate * global_best_cost);
+                    tau_min = tau_max / (2.0 * n);
+                }
             }
         }
 
-        // Globalna aktualizacja feromonu w MMAS (tylko Global Best)
-        // Parowanie ze wszystkich krawedzi
+        // Parowanie feromonu ze wszystkich krawedzi (wspolne dla AS i MMAS)
         for (int i = 0; i < n; ++i) {
             for (int j = 0; j < n; ++j) {
                 tau[i][j] = (1.0 - evaporation_rate) * tau[i][j];
             }
         }
         
-        // Zostawianie feromonu na sciezce best
-        if (global_best_cost != std::numeric_limits<int>::max()) {
-            double delta_tau = 1.0 / global_best_cost;
-            for (int i = 0; i < n - 1; ++i) {
-                int u = global_best_path[i];
-                int v = global_best_path[i + 1];
+        if (aco_variant == 1) { // MMAS
+            // Zostawianie feromonu tylko przez Global Best
+            if (global_best_cost != std::numeric_limits<int>::max()) {
+                double delta_tau = 1.0 / global_best_cost;
+                for (int i = 0; i < n - 1; ++i) {
+                    int u = global_best_path[i];
+                    int v = global_best_path[i + 1];
+                    tau[u][v] += delta_tau;
+                }
+                int u = global_best_path.back();
+                int v = global_best_path[0];
                 tau[u][v] += delta_tau;
             }
-            int u = global_best_path.back();
-            int v = global_best_path[0];
-            tau[u][v] += delta_tau;
-        }
 
-        // Przycinanie feromonu do limitów MMAS
-        for (int i = 0; i < n; ++i) {
-            for (int j = 0; j < n; ++j) {
-                if (tau[i][j] > tau_max) tau[i][j] = tau_max;
-                if (tau[i][j] < tau_min) tau[i][j] = tau_min;
+            // Przycinanie feromonu do limitow MMAS
+            for (int i = 0; i < n; ++i) {
+                for (int j = 0; j < n; ++j) {
+                    if (tau[i][j] > tau_max) tau[i][j] = tau_max;
+                    if (tau[i][j] < tau_min) tau[i][j] = tau_min;
+                }
+            }
+        } else { // Basic AS
+            // Zostawianie feromonu przez wszystkie mrowki z biezacej iteracji
+            for (int k = 0; k < ants_count; ++k) {
+                if (ant_costs[k] != std::numeric_limits<int>::max()) {
+                    double delta_tau = 1.0 / ant_costs[k];
+                    for (int i = 0; i < n - 1; ++i) {
+                        int u = ant_paths[k][i];
+                        int v = ant_paths[k][i + 1];
+                        tau[u][v] += delta_tau;
+                    }
+                    int u = ant_paths[k].back();
+                    int v = ant_paths[k][0];
+                    tau[u][v] += delta_tau;
+                }
             }
         }
 

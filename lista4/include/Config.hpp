@@ -15,6 +15,7 @@ struct ACOConfig {
     std::vector<int> ants_counts;
     std::vector<int> iterations;
     std::vector<int> init_methods; // 0=random, 1=NN, 2=RNN (do inicjalizacji feromonu)
+    std::vector<int> aco_variants; // 0=AS, 1=MMAS
 };
 
 struct Config

@@ -94,15 +94,17 @@ int main(int argc, char* argv[]) {
     int ants_count;
     int iterations;
     int init_method;
+    int aco_variant;
   };
   vector<ParamCombo> combos;
   
-  auto addCombo = [&](double a, double b, double er, int ac, int it, int im) {
+  auto addCombo = [&](double a, double b, double er, int ac, int it, int im, int var) {
       for (const auto& c : combos) {
           if (c.alpha == a && c.beta == b && c.evaporation_rate == er && 
-              c.ants_count == ac && c.iterations == it && c.init_method == im) return;
+              c.ants_count == ac && c.iterations == it && c.init_method == im &&
+              c.aco_variant == var) return;
       }
-      combos.push_back({a, b, er, ac, it, im});
+      combos.push_back({a, b, er, ac, it, im, var});
   };
 
   // Baseline config (first elements of each list)
@@ -112,15 +114,17 @@ int main(int argc, char* argv[]) {
   int b_ac = cfg.aco.ants_counts.empty() ? -1 : cfg.aco.ants_counts[0];
   int b_it = cfg.aco.iterations.empty() ? 100 : cfg.aco.iterations[0];
   int b_im = cfg.aco.init_methods.empty() ? 1 : cfg.aco.init_methods[0];
+  int b_var = cfg.aco.aco_variants.empty() ? 1 : cfg.aco.aco_variants[0];
 
-  addCombo(b_alpha, b_beta, b_er, b_ac, b_it, b_im);
+  addCombo(b_alpha, b_beta, b_er, b_ac, b_it, b_im, b_var);
   
-  for (double a : cfg.aco.alphas) addCombo(a, b_beta, b_er, b_ac, b_it, b_im);
-  for (double b : cfg.aco.betas) addCombo(b_alpha, b, b_er, b_ac, b_it, b_im);
-  for (double er : cfg.aco.evaporation_rates) addCombo(b_alpha, b_beta, er, b_ac, b_it, b_im);
-  for (int ac : cfg.aco.ants_counts) addCombo(b_alpha, b_beta, b_er, ac, b_it, b_im);
-  for (int it : cfg.aco.iterations) addCombo(b_alpha, b_beta, b_er, b_ac, it, b_im);
-  for (int im : cfg.aco.init_methods) addCombo(b_alpha, b_beta, b_er, b_ac, b_it, im);
+  for (double a : cfg.aco.alphas) addCombo(a, b_beta, b_er, b_ac, b_it, b_im, b_var);
+  for (double b : cfg.aco.betas) addCombo(b_alpha, b, b_er, b_ac, b_it, b_im, b_var);
+  for (double er : cfg.aco.evaporation_rates) addCombo(b_alpha, b_beta, er, b_ac, b_it, b_im, b_var);
+  for (int ac : cfg.aco.ants_counts) addCombo(b_alpha, b_beta, b_er, ac, b_it, b_im, b_var);
+  for (int it : cfg.aco.iterations) addCombo(b_alpha, b_beta, b_er, b_ac, it, b_im, b_var);
+  for (int im : cfg.aco.init_methods) addCombo(b_alpha, b_beta, b_er, b_ac, b_it, im, b_var);
+  for (int var : cfg.aco.aco_variants) addCombo(b_alpha, b_beta, b_er, b_ac, b_it, b_im, var);
 
   if (cfg.show_progress) {
     cout << "Znaleziono " << cfg.instances.size() << " plikow.\n";
@@ -158,12 +162,13 @@ int main(int argc, char* argv[]) {
     }
 
     for (const auto &combo : combos) {
-      string algo_label = "MMAS_" + initMethodName(combo.init_method);
+      string algo_name = (combo.aco_variant == 1) ? "MMAS" : "AS";
+      string algo_label = algo_name + "_" + initMethodName(combo.init_method);
 
       int current_lb = 0;
       auto run_aco = [&]() {
           auto res = antColonyOptimization(matrix, combo.alpha, combo.beta, combo.evaporation_rate,
-                                           combo.ants_count, combo.iterations, combo.init_method,
+                                           combo.ants_count, combo.iterations, combo.init_method, combo.aco_variant,
                                            cfg.time_limit_min);
           current_lb = res.lb;
           return res.best_cost;
@@ -181,7 +186,7 @@ int main(int argc, char* argv[]) {
 
                   csvOut << inst_name << ","
                          << size << ","
-                         << "MMAS" << ","
+                         << algo_name << ","
                          << initMethodName(combo.init_method) << ","
                          << combo.alpha << ","
                          << combo.beta << ","
@@ -199,14 +204,14 @@ int main(int argc, char* argv[]) {
 
       if (cfg.show_progress) {
           if (sum_res.cost == -2) {
-             cout << "   [MMAS] Przerwano z powodu braku pamieci\n";
+             cout << "   [" << algo_name << "] Przerwano z powodu braku pamieci\n";
           } else if (sum_res.cost == -3) {
-             cout << "   [MMAS] Przerwano z powodu przekroczenia limitu " << cfg.time_limit_min << " min\n";
+             cout << "   [" << algo_name << "] Przerwano z powodu przekroczenia limitu " << cfg.time_limit_min << " min\n";
           } else {
              double prd_avg = -1.0;
              if (optimum > 0) prd_avg = 100.0 * (sum_res.cost - optimum) / optimum;
              
-             cout << "   [MMAS] Avg time: " << sum_res.time_ms
+             cout << "   [" << algo_name << "] Avg time: " << sum_res.time_ms
                   << " ms | Best cost: " << sum_res.cost;
              if (optimum > 0) cout << " (PRD: " << std::fixed << std::setprecision(2) << prd_avg << "%)";
              cout << " | LB: " << current_lb
