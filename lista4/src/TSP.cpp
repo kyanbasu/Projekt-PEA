@@ -473,10 +473,12 @@ ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
                     int u = global_best_path[i];
                     int v = global_best_path[i + 1];
                     tau[u][v] += delta_tau;
+                    tau[v][u] += delta_tau; //sym
                 }
                 int u = global_best_path.back();
                 int v = global_best_path[0];
                 tau[u][v] += delta_tau;
+                tau[v][u] += delta_tau;
             }
 
             // Przycinanie feromonu do limitow MMAS
@@ -495,10 +497,12 @@ ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
                         int u = ant_paths[k][i];
                         int v = ant_paths[k][i + 1];
                         tau[u][v] += delta_tau;
+                        tau[v][u] += delta_tau; //sym
                     }
                     int u = ant_paths[k].back();
                     int v = ant_paths[k][0];
                     tau[u][v] += delta_tau;
+                    tau[v][u] += delta_tau;
                 }
             }
         }

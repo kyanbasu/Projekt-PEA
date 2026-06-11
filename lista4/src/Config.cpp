@@ -115,17 +115,22 @@ int calculateEuc2D(const Node &a, const Node &b) {
 
 int calculateGeoDist(const Node &a, const Node &b) {
   double PI = 3.141592;
-  double degToRad = PI / 180.0;
 
-  double lat_a = degToRad * a.x;
-  double lon_a = degToRad * a.y;
-  double lat_b = degToRad * b.x;
-  double lon_b = degToRad * b.y;
+  auto toRad = [&](double x) {
+    int deg = static_cast<int>(x + 0.5);
+    double min = x - deg;
+    return PI * (deg + 5.0 * min / 3.0) / 180.0;
+  };
+
+  double lat_a = toRad(a.x);
+  double lon_a = toRad(a.y);
+  double lat_b = toRad(b.x);
+  double lon_b = toRad(b.y);
 
   double q1 = cos(lon_a - lon_b);
   double q2 = cos(lat_a - lat_b);
   double q3 = cos(lat_a + lat_b);
-  return static_cast<int>(std::round(6378.388 * std::acos(0.5 * ((1.0 + q1) * q2 - (1.0 - q1) * q3)) + 1.0));
+  return static_cast<int>( 6378.388 * std::acos(0.5 * ((1.0 + q1) * q2 - (1.0 - q1) * q3)) + 1.0 );
 }
 
 std::vector<std::vector<int>> loadMatrix(const std::string &filepath,
