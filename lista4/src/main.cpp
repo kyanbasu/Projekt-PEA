@@ -161,6 +161,8 @@ int main(int argc, char* argv[]) {
       }
     }
 
+    bool is_symmetric = (inst_name.find(".atsp") == std::string::npos);
+
     for (const auto &combo : combos) {
       string algo_name = (combo.aco_variant == 1) ? "MMAS" : "AS";
       string algo_label = algo_name + "_" + initMethodName(combo.init_method);
@@ -169,7 +171,7 @@ int main(int argc, char* argv[]) {
       auto run_aco = [&]() {
           auto res = antColonyOptimization(matrix, combo.alpha, combo.beta, combo.evaporation_rate,
                                            combo.ants_count, combo.iterations, combo.init_method, combo.aco_variant,
-                                           cfg.time_limit_min);
+                                           cfg.time_limit_min, is_symmetric);
           current_lb = res.lb;
           return res.best_cost;
       };

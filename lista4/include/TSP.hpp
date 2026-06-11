@@ -26,4 +26,5 @@ struct ACOResult {
 ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
                                 double alpha, double beta, double evaporation_rate,
                                 int ants_count, int iterations,
-                                int init_method, int aco_variant, int time_limit_min);
+                                int init_method, int aco_variant, int time_limit_min,
+                                bool is_symmetric);

@@ -236,14 +236,15 @@ vector<int> repetitiveNearestNeighbourPath(const vector<vector<int>> &matrix) {
 ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
                                 double alpha, double beta, double evaporation_rate,
                                 int ants_count, int iterations,
-                                int init_method, int aco_variant, int time_limit_min) {
+                                int init_method, int aco_variant, int time_limit_min,
+                                bool is_symmetric) {
     ACOResult result;
     int n = matrix.size();
     if (n <= 1) {
         throw std::invalid_argument("Macierz musi miec co najmniej 2 miasta.");
     }
     
-    if (ants_count == -1) ants_count = n; // Dynamic ants_count
+    if (ants_count == -1) ants_count = n; // Dynamiczny ants_count
 
     if (ants_count <= 0 || iterations <= 0 || alpha < 0 || beta < 0 || evaporation_rate <= 0 || evaporation_rate > 1) {
         throw std::invalid_argument("Nieprawidlowe parametry ACO.");
@@ -294,7 +295,7 @@ ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
         tau_max = 1.0 / (evaporation_rate * global_best_cost);
         tau_min = tau_max / (2.0 * n);
         initial_tau = tau_max;
-    } else { // Basic AS
+    } else { // Zwykly AS
         initial_tau = (double)ants_count / global_best_cost;
     }
     
@@ -302,7 +303,6 @@ ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
     std::vector<std::vector<double>> choice_info(n, std::vector<double>(n, 0.0));
 
     double timeout_ms = time_limit_min * 60.0 * 1000.0;
-    // Precompute Candidate Lists (nn_list)
     int nn_size = std::min(n - 1, 30); // lista najblizszych sasiadow (max 30)
     std::vector<std::vector<int>> nn_list(n, std::vector<int>(nn_size));
     for (int i = 0; i < n; ++i) {
@@ -333,7 +333,7 @@ ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
             break;
         }
 
-        // Precomputing choice_info for the entire iteration
+        // Prekomputacja choice_info dla calej iteracji
         for (int i = 0; i < n; ++i) {
             for (int j = 0; j < n; ++j) {
                 if (i != j && matrix[i][j] != -1) {
@@ -473,12 +473,12 @@ ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
                     int u = global_best_path[i];
                     int v = global_best_path[i + 1];
                     tau[u][v] += delta_tau;
-                    tau[v][u] += delta_tau; //sym
+                    if (is_symmetric) tau[v][u] += delta_tau;
                 }
                 int u = global_best_path.back();
                 int v = global_best_path[0];
                 tau[u][v] += delta_tau;
-                tau[v][u] += delta_tau;
+                if (is_symmetric) tau[v][u] += delta_tau;
             }
 
             // Przycinanie feromonu do limitow MMAS
@@ -488,7 +488,7 @@ ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
                     if (tau[i][j] < tau_min) tau[i][j] = tau_min;
                 }
             }
-        } else { // Basic AS
+        } else { // Zwykly AS
             // Zostawianie feromonu przez wszystkie mrowki z biezacej iteracji
             for (int k = 0; k < ants_count; ++k) {
                 if (ant_costs[k] != std::numeric_limits<int>::max()) {
@@ -497,12 +497,12 @@ ACOResult antColonyOptimization(const std::vector<std::vector<int>>& matrix,
                         int u = ant_paths[k][i];
                         int v = ant_paths[k][i + 1];
                         tau[u][v] += delta_tau;
-                        tau[v][u] += delta_tau; //sym
+                        if (is_symmetric) tau[v][u] += delta_tau;
                     }
                     int u = ant_paths[k].back();
                     int v = ant_paths[k][0];
                     tau[u][v] += delta_tau;
-                    tau[v][u] += delta_tau;
+                    if (is_symmetric) tau[v][u] += delta_tau;
                 }
             }
         }
