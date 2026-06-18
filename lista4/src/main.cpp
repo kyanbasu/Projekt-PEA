@@ -107,24 +107,23 @@ int main(int argc, char* argv[]) {
       combos.push_back({a, b, er, ac, it, im, var});
   };
 
-  // Baseline config (first elements of each list)
   double b_alpha = cfg.aco.alphas.empty() ? 1.0 : cfg.aco.alphas[0];
   double b_beta = cfg.aco.betas.empty() ? 2.0 : cfg.aco.betas[0];
   double b_er = cfg.aco.evaporation_rates.empty() ? 0.1 : cfg.aco.evaporation_rates[0];
   int b_ac = cfg.aco.ants_counts.empty() ? -1 : cfg.aco.ants_counts[0];
   int b_it = cfg.aco.iterations.empty() ? 100 : cfg.aco.iterations[0];
   int b_im = cfg.aco.init_methods.empty() ? 1 : cfg.aco.init_methods[0];
-  int b_var = cfg.aco.aco_variants.empty() ? 1 : cfg.aco.aco_variants[0];
 
-  addCombo(b_alpha, b_beta, b_er, b_ac, b_it, b_im, b_var);
-  
-  for (double a : cfg.aco.alphas) addCombo(a, b_beta, b_er, b_ac, b_it, b_im, b_var);
-  for (double b : cfg.aco.betas) addCombo(b_alpha, b, b_er, b_ac, b_it, b_im, b_var);
-  for (double er : cfg.aco.evaporation_rates) addCombo(b_alpha, b_beta, er, b_ac, b_it, b_im, b_var);
-  for (int ac : cfg.aco.ants_counts) addCombo(b_alpha, b_beta, b_er, ac, b_it, b_im, b_var);
-  for (int it : cfg.aco.iterations) addCombo(b_alpha, b_beta, b_er, b_ac, it, b_im, b_var);
-  for (int im : cfg.aco.init_methods) addCombo(b_alpha, b_beta, b_er, b_ac, b_it, im, b_var);
-  for (int var : cfg.aco.aco_variants) addCombo(b_alpha, b_beta, b_er, b_ac, b_it, b_im, var);
+  for (int var : cfg.aco.aco_variants) {
+      addCombo(b_alpha, b_beta, b_er, b_ac, b_it, b_im, var);
+      
+      for (double a : cfg.aco.alphas) addCombo(a, b_beta, b_er, b_ac, b_it, b_im, var);
+      for (double b : cfg.aco.betas) addCombo(b_alpha, b, b_er, b_ac, b_it, b_im, var);
+      for (double er : cfg.aco.evaporation_rates) addCombo(b_alpha, b_beta, er, b_ac, b_it, b_im, var);
+      for (int ac : cfg.aco.ants_counts) addCombo(b_alpha, b_beta, b_er, ac, b_it, b_im, var);
+      for (int it : cfg.aco.iterations) addCombo(b_alpha, b_beta, b_er, b_ac, it, b_im, var);
+      for (int im : cfg.aco.init_methods) addCombo(b_alpha, b_beta, b_er, b_ac, b_it, im, var);
+  }
 
   if (cfg.show_progress) {
     cout << "Znaleziono " << cfg.instances.size() << " plikow.\n";
